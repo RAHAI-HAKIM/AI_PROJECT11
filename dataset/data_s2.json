@@ -9,204 +9,238 @@
             "id": 101,
             "name": "AMPHI_1",
             "capacity": 200,
+            "floor": 1,
             "room_type_id": 1
         },
         {
             "id": 102,
             "name": "AMPHI_2",
             "capacity": 200,
+            "floor": 1,
             "room_type_id": 1
         },
         {
             "id": 103,
             "name": "AMPHI_3",
             "capacity": 200,
+            "floor": 1,
             "room_type_id": 1
         },
         {
             "id": 104,
             "name": "AMPHI_4",
             "capacity": 200,
+            "floor": 1,
             "room_type_id": 1
         },
         {
             "id": 105,
             "name": "AMPHI_5",
             "capacity": 200,
+            "floor": 2,
             "room_type_id": 1
         },
         {
             "id": 106,
             "name": "AMPHI_6",
             "capacity": 200,
+            "floor": 2,
             "room_type_id": 1
         },
         {
             "id": 107,
             "name": "AMPHI_7",
             "capacity": 200,
+            "floor": 2,
             "room_type_id": 1
         },
         {
             "id": 201,
             "name": "LAB_1",
             "capacity": 32,
+            "floor": 1,
             "room_type_id": 2
         },
         {
             "id": 202,
             "name": "LAB_2",
             "capacity": 32,
+            "floor": 1,
             "room_type_id": 2
         },
         {
             "id": 203,
             "name": "LAB_3",
             "capacity": 32,
+            "floor": 1,
             "room_type_id": 2
         },
         {
             "id": 204,
             "name": "LAB_4",
             "capacity": 32,
+            "floor": 1,
             "room_type_id": 2
         },
         {
             "id": 205,
             "name": "LAB_5",
             "capacity": 32,
+            "floor": 1,
             "room_type_id": 2
         },
         {
             "id": 206,
             "name": "LAB_6",
             "capacity": 32,
+            "floor": 1,
             "room_type_id": 2
         },
         {
             "id": 207,
             "name": "LAB_7",
             "capacity": 32,
+            "floor": 1,
             "room_type_id": 2
         },
         {
             "id": 208,
             "name": "LAB_8",
             "capacity": 32,
+            "floor": 1,
             "room_type_id": 2
         },
         {
             "id": 209,
             "name": "LAB_9",
             "capacity": 32,
+            "floor": 2,
             "room_type_id": 2
         },
         {
             "id": 210,
             "name": "LAB_10",
             "capacity": 32,
+            "floor": 2,
             "room_type_id": 2
         },
         {
             "id": 211,
             "name": "LAB_11",
             "capacity": 32,
+            "floor": 2,
             "room_type_id": 2
         },
         {
             "id": 212,
             "name": "LAB_12",
             "capacity": 32,
+            "floor": 2,
             "room_type_id": 2
         },
         {
             "id": 301,
             "name": "TUTORIAL_1",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
             "id": 302,
             "name": "TUTORIAL_2",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
             "id": 303,
             "name": "TUTORIAL_3",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
             "id": 304,
             "name": "TUTORIAL_4",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
             "id": 305,
             "name": "TUTORIAL_5",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
             "id": 306,
             "name": "TUTORIAL_6",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
-            "id": 307,
-            "name": "TUTORIAL_7",
+            "id": 319,
+            "name": "TUTORIAL_19",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
-            "id": 308,
-            "name": "TUTORIAL_8",
+            "id": 320,
+            "name": "TUTORIAL_20",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
-            "id": 309,
-            "name": "TUTORIAL_9",
+            "id": 321,
+            "name": "TUTORIAL_21",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
-            "id": 310,
-            "name": "TUTORIAL_10",
+            "id": 322,
+            "name": "TUTORIAL_22",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
-            "id": 311,
-            "name": "TUTORIAL_11",
+            "id": 323,
+            "name": "TUTORIAL_23",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
-            "id": 312,
-            "name": "TUTORIAL_12",
+            "id": 324,
+            "name": "TUTORIAL_24",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 3
         },
         {
             "id": 401,
             "name": "CIRCUIT_LAB_1",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 4
         },
         {
             "id": 501,
             "name": "ENG_LAB_1",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 5
         },
         {
             "id": 502,
             "name": "ENG_LAB_2",
             "capacity": 28,
+            "floor": 0,
             "room_type_id": 5
         }
     ],
@@ -6007,57 +6041,74 @@
     ],
     "constraints": {
         "hard": [
-            "NO_GROUP_DOUBLE_BOOKING",
-            "NO_TEACHER_DOUBLE_BOOKING",
-            "NO_ROOM_DOUBLE_BOOKING",
-            "ROOM_CAPACITY_GEQ_HEADCOUNT",
-            "MATCH_ROOM_TYPE",
-            "TEACHER_MIN_HOURS_9",
-            "TEACHER_MAX_HOURS_17",
-            "TEACHER_MAX_COURSES_2",
-            "SEPARATE_LECTURE_PRACTICE",
-            "CONSECUTIVE_SECTION_LECTURES",
-            "MAX_CONSECUTIVE_STUDENT_SLOTS_3"
+            {
+                "rule": "NO_GROUP_DOUBLE_BOOKING",
+                "category": "external"
+            },
+            {
+                "rule": "NO_TEACHER_DOUBLE_BOOKING",
+                "category": "external"
+            },
+            {
+                "rule": "NO_ROOM_DOUBLE_BOOKING",
+                "category": "external"
+            },
+            {
+                "rule": "ROOM_CAPACITY_GEQ_HEADCOUNT",
+                "category": "general"
+            },
+            {
+                "rule": "MATCH_ROOM_TYPE",
+                "category": "general"
+            },
+            {
+                "rule": "SEPARATE_LECTURE_PRACTICE",
+                "category": "group-prof"
+            },
+            {
+                "rule": "MAX_CONSECUTIVE_SLOTS_3",
+                "category": "group-prof"
+            }
         ],
         "soft": [
             {
-                "rule": "MINIMIZE_GROUP_GAPS",
+                "rule": "MINIMIZE_GAPS",
+                "category": "group-prof",
                 "weight": 1.0
             },
             {
                 "rule": "MINIMIZE_TEACHER_DAYS",
+                "category": "prof",
                 "weight": 1.0
             },
             {
                 "rule": "MORNING_LECTURES",
+                "category": "general",
                 "weight": 0.8
             },
             {
-                "rule": "BLOCK_SIMILAR_ACTIVITIES",
+                "rule": "SIMILAR_ACTIVITIES",
+                "category": "external",
                 "weight": 0.8
             },
             {
                 "rule": "AVOID_THURSDAY_AFTERNOON",
+                "category": "group-prof",
                 "weight": 0.7
             },
             {
                 "rule": "AVOID_LAST_SLOT",
+                "category": "group-prof",
                 "weight": 0.7
             },
             {
-                "rule": "MINIMIZE_STUDENT_ROOM_CHANGES",
+                "rule": "MINIMIZE_ROOM_CHANGES",
+                "category": "group-prof",
                 "weight": 0.5
-            },
-            {
-                "rule": "TARGET_TEACHER_AVG_12H",
-                "weight": 0.5
-            },
-            {
-                "rule": "MAX_TWO_BLOCKS_PER_DAY",
-                "weight": 0.4
             },
             {
                 "rule": "MINIMIZE_WASTED_SEATS",
+                "category": "external",
                 "weight": 0.2
             }
         ]
