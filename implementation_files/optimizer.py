@@ -4,7 +4,7 @@ from collections import deque
 
 # defines functions and returns optimized states
 class Optimizer:
-    def Simulated_Annealing(self, problem,objective, initial_temp, cooling_rate, max_iterations,strategy="Linear"):
+    def Simulated_Annealing(self, problem, objective, initial_temp, cooling_rate, max_iterations,strategy="Linear"):
         """
         gets the problem's current state and returns an optimized one using SA
         """

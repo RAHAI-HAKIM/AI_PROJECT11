@@ -6042,32 +6042,48 @@
     "constraints": {
         "hard": [
             {
+                "rule": "NO_ROOM_DOUBLE_BOOKING",
+                "category": "slot_to_rooms"
+            },
+            {
                 "rule": "NO_GROUP_DOUBLE_BOOKING",
-                "category": "external"
+                "category": "slot_to_groups"
             },
             {
                 "rule": "NO_TEACHER_DOUBLE_BOOKING",
-                "category": "external"
-            },
-            {
-                "rule": "NO_ROOM_DOUBLE_BOOKING",
-                "category": "external"
+                "category": "slot_to_teachers"
             },
             {
                 "rule": "ROOM_CAPACITY_GEQ_HEADCOUNT",
-                "category": "general"
+                "category": "state_based"
             },
             {
                 "rule": "MATCH_ROOM_TYPE",
-                "category": "general"
+                "category": "state_based"
             },
             {
                 "rule": "SEPARATE_LECTURE_PRACTICE",
-                "category": "group-prof"
+                "category": "state_based"
             },
             {
-                "rule": "MAX_CONSECUTIVE_SLOTS_3",
-                "category": "group-prof"
+                "rule": "CONSECUTIVE_SECTION_LECTURES",
+                "category": "state_based"
+            },
+            {
+                "rule": "MAX_CONSECUTIVE_STUDENT_SLOTS_3",
+                "category": "state_based"
+            },
+            {
+                "rule": "TEACHER_MIN_HOURS_9",
+                "category": "teacher_based"
+            },
+            {
+                "rule": "TEACHER_MAX_HOURS_17",
+                "category": "teacher_based"
+            },
+            {
+                "rule": "TEACHER_MAX_COURSES_2",
+                "category": "teacher_based"
             }
         ],
         "soft": [

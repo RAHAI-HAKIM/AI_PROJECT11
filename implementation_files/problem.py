@@ -254,25 +254,23 @@ class EnsiaProblem(Problem):
         return 0.6 * groups_cost + 0.4 * profs_cost + add_cost # parameters to be modified
 
     def evaluate_csp(self, state):
+
+        slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = self.constraint_obj._build_lookup_tables(state)
         c = self.constraint_obj
 
-        slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = c._build_lookup_tables(state)
+        category_args = {
+            "slot_to_rooms":    (slot_to_rooms,),
+            "slot_to_groups":   (slot_to_groups,),
+            "slot_to_teachers": (slot_to_teachers,),
+            "state_based":      (state,),
+            "teacher_based":    (teacher_events,),
+        }
 
         violations = 0
-
-        
-        violations += c.NO_ROOM_DOUBLE_BOOKING(slot_to_rooms)
-        violations += c.NO_GROUP_DOUBLE_BOOKING(slot_to_groups)
-        violations += c.NO_TEACHER_DOUBLE_BOOKING(slot_to_teachers)
-        violations += c.ROOM_CAPACITY_GEQ_HEADCOUNT(state)
-        violations += c.MATCH_ROOM_TYPE(state)
-        violations += c.TEACHER_MIN_HOURS_9(teacher_events)
-        violations += c.TEACHER_MAX_HOURS_17(teacher_events)
-        violations += c.TEACHER_MAX_COURSES_2(teacher_events)
-        violations += c.SEPARATE_LECTURE_PRACTICE(state)
-        violations += c.CONSECUTIVE_SECTION_LECTURES(state)
-        violations += c.MAX_CONSECUTIVE_STUDENT_SLOTS_3(state)
-
+        for hc in self.hard_constraints_list:
+            fn   = getattr(c, hc["rule"])
+            args = category_args[hc["category"]]
+            violations += fn(*args, count=True)
         return violations # parameters to be modified
         
 
