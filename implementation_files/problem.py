@@ -190,10 +190,16 @@ class EnsiaProblem(Problem):
         # this method is used after generating a random state to resolve constraints using local search
         pass
 
-    def generate_neighbors(self, state, event, size=50): # returns at most size states
+    def generate_neighbors(self, state, event_id, size=50):
+        # returns at most size states by assigning possible slots to a state
         for slot in self.slots:
-            state[event] = slot
-            if self.evaluate_csp(state) == 0:
+            state[event_id] = slot
+            for rule in self.hard_constraints_list:
+                rule_function = getattr(self.constraint_obj, rule)
+                if rule_function(state):
+                    break
+            else:
+                # if no hard constraint is violated, i.e. for loop terminated without breaking
                 yield state
                 size -= 1
                 if size <= 0:
@@ -201,7 +207,7 @@ class EnsiaProblem(Problem):
             state[event] = None
 
         # last part on how this function is used and what is expected
-        state[event] = None
+        state[event_id] = None
 
     def move_operator(self):
         return self.generate_neighbors(1)
