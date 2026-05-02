@@ -55,7 +55,57 @@ class Optimizer:
         # calls the choosen HC variant to optimize -num_restart- randomely choosen valid states and selects the best
         pass
 
-    def Tabu_Search(self, problem):
-        # gets the problem's current state and returns an optimized one using tabu search
-        pass
+    def tabu_random_restarts(problem, restarts=5, iters=300, tabu_size=20):
+    
+        global_best = None
+        global_best_val = float("inf")
+
+        for _ in range(restarts):
+            state = problem.random_state()
+            best = state[:]
+            best_val = problem.evaluate(state)
+
+            tabu_queue = deque()
+            tabu_set = set()
+
+            for _ in range(iters):
+                best_candidate = None
+                best_candidate_val = float("inf")
+
+                neighbors = problem.neighbors(state)
+
+                for st in neighbors:
+                    t = tuple(st)
+
+                    if t not in tabu_set:
+                        val = problem.evaluate(st)
+
+                        if val < best_candidate_val:
+                            best_candidate = st
+                            best_candidate_val = val
+
+                if best_candidate is None:
+                    break
+
+                state = best_candidate[:]
+                t = tuple(state)
+
+                tabu_queue.append(t)
+                tabu_set.add(t)
+
+                if len(tabu_queue) > tabu_size:
+                    old = tabu_queue.popleft()
+                    tabu_set.remove(old)
+
+                if best_candidate_val < best_val:
+                    best = state[:]
+                    best_val = best_candidate_val
+
+
+            if best_val < global_best_val:
+                global_best = best[:]
+                global_best_val = best_val
+
+        return global_best
+  
 
