@@ -9,6 +9,308 @@ class Constraints:
     def __init__(self, problem):
         self.problem = problem
     
+    # build lookup tables once before looping, then check per constraint.
+    def _build_lookup_tables(self, state):
+        """
+        Preprocesses the current schedule state into resource-centric lookup tables 
+        for highly efficient constraint evaluation.
+
+        Args:
+            state (dict): The current assignment mapping event_id -> (roomid, slot).
+
+        Returns:
+            tuple: Four dictionaries mapping slots to rooms, groups, and teachers, 
+                   plus a mapping of teachers to their assigned events.
+        """
+        from collections import defaultdict
+        slot_to_rooms    = defaultdict(list)  
+        slot_to_groups   = defaultdict(list)  
+        slot_to_teachers = defaultdict(list)
+        teacher_events   = defaultdict(list) 
+
+        for event_id, (roomid, slot) in state.items():
+            event = self.problem.events_by_id[event_id]
+            teacher_id = event["teacher_id"]
+
+            slot_to_rooms[slot].append(roomid)
+            slot_to_teachers[slot].append(teacher_id)
+            teacher_events[teacher_id].append(event_id)
+
+            if event["type_id"] == 1: 
+                for gid in self.problem.section_to_group[event["target_id"]]:
+                    slot_to_groups[slot].append(gid)
+            else:                      
+                slot_to_groups[slot].append(event["target_id"])
+
+        return slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events
+    
+    # Hard constraints methods
+    # DOUBLE BOOKING
+
+    def NO_ROOM_DOUBLE_BOOKING(self, slot_to_rooms, count=True):
+        """
+        Checks if any room is assigned to more than one event during the same timeslot.
+
+        Args:
+            slot_to_rooms (dict): Mapping of timeslots to lists of assigned room IDs.
+            count (bool): If True, returns the total violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        violations = 0
+        for slot, rooms in slot_to_rooms.items():
+            v = len(rooms) - len(set(rooms))
+            if not count and v > 0: return False
+            violations += v
+        return violations if count else True
+
+    def NO_GROUP_DOUBLE_BOOKING(self, slot_to_groups, count=True):
+        """
+        Checks if any student group is scheduled for multiple events during the same timeslot.
+
+        Args:
+            slot_to_groups (dict): Mapping of timeslots to lists of assigned group IDs.
+            count (bool): If True, returns the total violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        violations = 0
+        for slot, groups in slot_to_groups.items():
+            v = len(groups) - len(set(groups))
+            if not count and v > 0: return False
+            violations += v
+        return violations if count else True
+
+    def NO_TEACHER_DOUBLE_BOOKING(self, slot_to_teachers, count=True):
+        """
+        Checks if any teacher is scheduled to teach multiple events during the same timeslot.
+
+        Args:
+            slot_to_teachers (dict): Mapping of timeslots to lists of assigned teacher IDs.
+            count (bool): If True, returns the total violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        violations = 0
+        for slot, teachers in slot_to_teachers.items():
+            v = len(teachers) - len(set(teachers))
+            if not count and v > 0: return False
+            violations += v
+        return violations if count else True
+
+    # ROOM SUITABILITY
+
+    def ROOM_CAPACITY_GEQ_HEADCOUNT(self, state, count=True):
+        """
+        Ensures the assigned room's capacity is greater than or equal to the event's student headcount.
+
+        Args:
+            state (dict): The current schedule assignment.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        violations = 0
+        for event_id, (roomid, slot) in state.items():
+            event = self.problem.events_by_id[event_id]
+            room  = self.problem.rooms_by_id[roomid]
+            if room["capacity"] < event["headcount"]:
+                if not count: return False
+                violations += 1
+        return violations if count else True
+
+    def MATCH_ROOM_TYPE(self, state, count=True):
+        """
+        Ensures the assigned room type matches the required room type for the event (e.g., lecture hall vs lab).
+
+        Args:
+            state (dict): The current schedule assignment.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        violations = 0
+        for event_id, (roomid, slot) in state.items():
+            event = self.problem.events_by_id[event_id]
+            room  = self.problem.rooms_by_id[roomid]
+            if room["room_type_id"] != event["required_room_type_id"]:
+                if not count: return False
+                violations += 1
+        return violations if count else True
+
+    # TEACHER WORKLOAD
+
+    def _teacher_total_hours(self, teacher_events):
+        """
+        Helper method to calculate the total assigned teaching hours for each teacher.
+
+        Args:
+            teacher_events (dict): Mapping of teacher IDs to lists of their assigned event IDs.
+
+        Returns:
+            dict: Mapping of teacher_id -> total_hours (float).
+        """
+        from collections import defaultdict
+        hours = defaultdict(float)
+        for teacher_id, event_ids in teacher_events.items():
+            for eid in event_ids:
+                hours[teacher_id] += self.problem.events_by_id[eid]["duration_hours"]
+        return hours
+
+    def TEACHER_MIN_HOURS_9(self, teacher_events, count=True):
+        """
+        Ensures each active teacher meets the minimum required workload of 9 hours.
+
+        Args:
+            teacher_events (dict): Mapping of teacher IDs to lists of their assigned event IDs.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        violations = 0
+        hours = self._teacher_total_hours(teacher_events)
+        for teacher_id, h in hours.items():
+            if h < 9:
+                if not count: return False
+                violations += 1
+        return violations if count else True
+
+    def TEACHER_MAX_HOURS_17(self, teacher_events, count=True):
+        """
+        Ensures no teacher exceeds the maximum allowed workload of 17 hours.
+
+        Args:
+            teacher_events (dict): Mapping of teacher IDs to lists of their assigned event IDs.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        violations = 0
+        hours = self._teacher_total_hours(teacher_events)
+        for teacher_id, h in hours.items():
+            if h > 17:
+                if not count: return False
+                violations += 1
+        return violations if count else True
+
+    def TEACHER_MAX_COURSES_2(self, teacher_events, count=True):
+        """
+        Ensures a teacher is not assigned to teach more than 2 distinct courses.
+
+        Args:
+            teacher_events (dict): Mapping of teacher IDs to lists of their assigned event IDs.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        violations = 0
+        for teacher_id, event_ids in teacher_events.items():
+            courses = {self.problem.events_by_id[eid]["course_name"] for eid in event_ids}
+            if len(courses) > 2:
+                if not count: return False
+                violations += 1
+        return violations if count else True
+
+    # SCHEDULING STRUCTURE
+
+    def SEPARATE_LECTURE_PRACTICE(self, state, count=True):
+        """
+        Prevents scheduling a lecture and a practice session for the same course and group on the same day.
+
+        Args:
+            state (dict): The current schedule assignment.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        from collections import defaultdict
+        key_to_types = defaultdict(list)
+        for event_id, (roomid, slot) in state.items():
+            event = self.problem.events_by_id[event_id]
+            day   = slot // 6
+            groups = (self.problem.section_to_group[event["target_id"]]
+                    if event["type_id"] == 1 else [event["target_id"]])
+            for gid in groups:
+                key_to_types[(gid, event["course_name"], day)].append(event["type_id"])
+
+        violations = 0
+        for (gid, course, day), types in key_to_types.items():
+            if any(t == 1 for t in types) and any(t != 1 for t in types):
+                if not count: return False
+                violations += 1
+        return violations if count else True
+
+    def CONSECUTIVE_SECTION_LECTURES(self, state, count=True):
+        """
+        Ensures that if a course has multiple lectures for a section, they are scheduled in consecutive slots.
+
+        Args:
+            state (dict): The current schedule assignment.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        from collections import defaultdict
+        course_slots = defaultdict(list)
+        for event_id, (roomid, slot) in state.items():
+            event = self.problem.events_by_id[event_id]
+            if event["type_id"] == 1:
+                course_slots[event["course_name"]].append(slot)
+
+        violations = 0
+        for course, slots in course_slots.items():
+            if len(slots) < 2: continue
+            for i in range(len(slots)):
+                for j in range(i + 1, len(slots)):
+                    if not ((slots[i] // 6) == (slots[j] // 6) and abs(slots[i] - slots[j]) == 1):
+                        if not count: return False
+                        violations += 1
+        return violations if count else True
+
+    def MAX_CONSECUTIVE_STUDENT_SLOTS_3(self, state, count=True):
+        """
+        Ensures no student group is scheduled for more than 3 consecutive timeslots without a break.
+
+        Args:
+            state (dict): The current schedule assignment.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        from collections import defaultdict
+        group_day_slots = defaultdict(lambda: defaultdict(set))
+        for event_id, (roomid, slot) in state.items():
+            event = self.problem.events_by_id[event_id]
+            day, time = slot // 6, slot % 6
+            groups = (self.problem.section_to_group[event["target_id"]]
+                    if event["type_id"] == 1 else [event["target_id"]])
+            for gid in groups:
+                group_day_slots[gid][day].add(time)
+
+        violations = 0
+        for gid, days in group_day_slots.items():
+            for day, times in days.items():
+                sorted_times = sorted(times)
+                run = max_run = 1
+                for k in range(1, len(sorted_times)):
+                    run = run + 1 if sorted_times[k] == sorted_times[k-1] + 1 else 1
+                    max_run = max(max_run, run)
+                if max_run > 3:
+                    if not count: return False
+                    violations += 1
+        return violations if count else True
+
     # soft constraints methods
 
     # external constraints
@@ -121,8 +423,6 @@ class Constraints:
         if num_days < num_sessions // 3: return 0
         return weight * (num_days + 1 - (num_sessions // 3)) # the penalty increases with every additional day
 
-    
-
 
 # ensia specific problem class
 class EnsiaProblem(Problem):
@@ -170,25 +470,193 @@ class EnsiaProblem(Problem):
         
 
     def load_data(self, filename):
-        pass # returnes a list of 2 lists having events, rooms 
+        """
+        Loads the semester JSON data and converts the dictionary structure into 
+        an indexed list format compatible with the constructor.
+        
+        Args:
+            filename (str): Path to the data_sX.json file.
+            
+        Returns:
+            list: [rooms, sections, groups, events, constraints]
+        """
+        import json
+        import os
+
+        # Check if file exists to avoid crashes
+        if not os.path.exists(filename):
+            raise FileNotFoundError(f"Dataset file {filename} not found.")
+        
+        with open(filename, 'r', encoding='utf-8') as f:
+            raw_data = json.load(f)
+        
+        # Mapping dict keys to the specific list order expected by __init__
+        # data[0]=rooms, [1]=sections, [2]=groups, [3]=events, [4]=constraints
+        return [
+            raw_data.get("rooms", []),
+            raw_data.get("sections", []),
+            raw_data.get("groups", []),
+            raw_data.get("activities", []),
+            raw_data.get("constraints", {})
+        ]
+ 
 
 
-    def generate_valid_state(self): 
-        # does csp
-        pass 
-        # and it's depending methods
+    # CSP Global
 
-    def backtrack():
-        # used by csp
-        pass
+    def is_consistent(self, state):
+        """
+        Evaluates a complete or partial state against all hard constraints.
+
+        Args:
+            state (dict): The current assignment mapping event_id -> (roomid, slot).
+
+        Returns:
+            bool: True if no hard constraints are violated, False otherwise.
+        """
+        slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = \
+            self.constraint_obj._build_lookup_tables(state)
+        c = self.constraint_obj
+
+        category_args = {
+            "slot_to_rooms":    (slot_to_rooms,),
+            "slot_to_groups":   (slot_to_groups,),
+            "slot_to_teachers": (slot_to_teachers,),
+            "state_based":      (state,),
+            "teacher_based":    (teacher_events,),
+        }
+
+        for hc in self.hard_constraints_list:
+            fn   = getattr(c, hc["rule"])
+            args = category_args[hc["category"]]
+            if not fn(*args, count=False): 
+                return False
+        return True
+    
+    def generate_valid_state(self):
+        """
+        Initiates a backtracking search to find a schedule satisfying all hard constraints.
+        Events are ordered by type and headcount to optimize the search tree.
+
+        Returns:
+            dict: A fully valid state mapping event_id -> (roomid, slot).
+
+        Raises:
+            RuntimeError: If no valid schedule can be mathematically found.
+        """
+        import random
+        ordered_events = sorted(
+            self.events,
+            key=lambda e: (0 if e["type_id"] == 1 else 1, -e["headcount"])
+        )
+        random.shuffle(ordered_events) 
+        state  = {}
+        result = self._backtrack(ordered_events, 0, state)
+        if result is None:
+            raise RuntimeError("No valid schedule found — check your data.")
+        return result
+
+    def _backtrack(self, ordered_events, index, state):
+        """
+        Recursive helper method that performs depth-first search to assign events.
+
+        Args:
+            ordered_events (list): Events sorted by difficulty (lectures/large classes first).
+            index (int): The current index in the ordered_events list being assigned.
+            state (dict): The partial schedule assignment being built.
+
+        Returns:
+            dict | None: The completed valid state, or None if the current path fails.
+        """
+        import random
+
+        if index == len(ordered_events):
+            return state 
+
+        event    = ordered_events[index]
+        event_id = event["id"]
+
+        if not state:
+            candidates = [(r["id"], s) for r in self.rooms for s in range(30)]
+            random.shuffle(candidates)
+        else:
+            candidates = [(r["id"], s) for r in self.rooms for s in range(30)]
+            random.shuffle(candidates)
+
+        for roomid, slot in candidates:
+            state[event_id] = (roomid, slot)
+            if self.is_consistent(state):                  
+                result = self._backtrack(ordered_events, index + 1, state)
+                if result is not None:
+                    return result
+            del state[event_id]
+
+        return None
+
+    # CSP Local
 
     def generate_random_state(self):
-        # random assignment, not respecting any constraints
-        pass
-    
-    def enhance(state):
-        # this method is used after generating a random state to resolve constraints using local search
-        pass
+        """
+        Generates a random schedule assignment, but with no double booking.
+        Used primarily as the initial starting point for local search algorithms.
+
+        Returns:
+            dict: A randomly generated state mapping event_id -> (roomid, slot).
+        """
+        import random
+        shuffled_slots = random.sample(self.slots, len(self.events))
+        return {event["id"]: slot for event, slot in zip(self.events, shuffled_slots)}
+
+    def enhance(self, state, method="hill_climbing_steepest"):
+        """
+        Applies a local search algorithm to iteratively improve a schedule 
+        by resolving hard constraint violations. Includes random restarts to escape local optima.
+
+        Args:
+            state (dict): The initial schedule assignment.
+            method (str): The local search heuristic to use (default: "hill_climbing_steepest").
+
+        Returns:
+            dict: The optimized state with minimized (ideally zero) constraint violations.
+
+        Raises:
+            ValueError: If an unknown search method is provided.
+        """
+        from optimizer import Optimizer
+        opt = Optimizer()
+
+        MAX_RESTARTS = 20
+        current = dict(state)
+
+        method_map = {
+            "hill_climbing_steepest":        (opt.Hill_Climbing,               {"strategy": "steepest"}),
+            "hill_climbing_first":           (opt.Hill_Climbing,               {"strategy": "first"}),
+            "hill_climbing_stochastic":      (opt.Hill_Climbing,               {"strategy": "stochastic"}),
+            "hill_climbing_random_restart":  (opt.Random_Restart_Hill_Climbing, {}),
+            "simulated_annealing":           (opt.Simulated_Annealing,         {}),
+            "tabu_search":                   (opt.Tabu_Search,                 {}),
+        }
+        if method not in method_map:
+            raise ValueError(f"Unknown method '{method}'. Choose from {list(method_map)}")
+
+        search_fn, kwargs = method_map[method]
+
+        for _ in range(MAX_RESTARTS):
+            self.state = current
+            result, cost = search_fn(problem=self, objective=self.evaluate_csp, **kwargs)
+
+            if cost == 0:
+                return result
+
+            import random
+            kicked = dict(result)
+            for _ in range(5):
+                eid = random.choice(list(kicked.keys()))
+                kicked[eid] = random.choice(self.slots)
+            current = kicked
+
+        return result
+
 
     def generate_neighbors(state, size=50): # returns at most size states
         pass
