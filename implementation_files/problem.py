@@ -253,58 +253,26 @@ class EnsiaProblem(Problem):
             profs_cost /= len(prof_schedules)
         return 0.6 * groups_cost + 0.4 * profs_cost + add_cost # parameters to be modified
 
-    def evaluate_csp(self,state):
-        # returns the number of hard constraints violated, used for local search CSP
-        # we use the Min-conflicts heuristic
-        num_voilated_constraints = 0
-        # initialize empty timetables for each group and prof
-        group_schedules = {g : [] for g in self.groups_by_id}
-        prof_schedules = {}
-        # devide constraints
-        external_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "external"]
-        general_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "general"]
-        group_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "group" or sc["category"] == "group-prof"]
-        prof_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "prof" or sc["category"] == "group-prof"]
+    def evaluate_csp(self, state):
+        c = self.constraint_obj
 
-        for ec in external_constraints:
-            constraint_function = getattr(self.constraint_obj, ec["rule"])
-            num_voilated_constraints += constraint_function(state)
+        slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = c._build_lookup_tables(state)
 
+        violations = 0
 
-        for event_id, (roomid, slot) in state.items():
-            event_data = self.events_by_id(event_id)
-            if not event_data: continue
+        
+        violations += c.NO_ROOM_DOUBLE_BOOKING(slot_to_rooms)
+        violations += c.NO_GROUP_DOUBLE_BOOKING(slot_to_groups)
+        violations += c.NO_TEACHER_DOUBLE_BOOKING(slot_to_teachers)
+        violations += c.ROOM_CAPACITY_GEQ_HEADCOUNT(state)
+        violations += c.MATCH_ROOM_TYPE(state)
+        violations += c.TEACHER_MIN_HOURS_9(teacher_events)
+        violations += c.TEACHER_MAX_HOURS_17(teacher_events)
+        violations += c.TEACHER_MAX_COURSES_2(teacher_events)
+        violations += c.SEPARATE_LECTURE_PRACTICE(state)
+        violations += c.CONSECUTIVE_SECTION_LECTURES(state)
+        violations += c.MAX_CONSECUTIVE_STUDENT_SLOTS_3(state)
 
-            prof_id = event_data["teacher_id"]
-            target_id = event_data["target_id"] # may be a section
-
-            # general constraits
-            for gc in general_constraints: 
-                constraint_function = getattr(self.constraint_obj, gc["rule"])
-                num_voilated_constraints += constraint_function(event_data, roomid, slot)
-            # fill in group and prof schedules
-            if prof_id not in prof_schedules: prof_schedules[prof_id] = []
-            prof_schedules[prof_id].append((roomid, slot))
-            
-            if event_data["type"] == 1: # if the event is a lecture, add it to all the groups of that section
-                for group_id in self.section_to_group[target_id]:
-                    group_schedules[group_id] = []
-                    group_schedules[group_id] .append((roomid, slot))
-            else:
-                group_schedules[target_id] = []
-                group_schedules[target_id] .append((roomid, slot))
-
-            # handle each prof and group alone
-        for prof_id, sched in prof_schedules.items():
-            for pc in prof_constraints:
-                constraint_function = getattr(self.constraint_obj, pc["rule"])
-                num_voilated_constraints += constraint_obj.constraint_function(sched)
-
-        for group_id, sched in group_schedules.items():
-            for grc in group_constraints:
-                constraint_function = getattr(self.constraint_obj, gc["rule"])
-                num_voilated_constraints += constraint_obj.constraint_function(sched)
-
-        return num_voilated_constraints # parameters to be modified
+        return violations # parameters to be modified
         
 
