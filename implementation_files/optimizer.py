@@ -1,15 +1,17 @@
 from math import exp
 import random
+from collections import deque
 
-#defines functions and returns optimized states
+# defines functions and returns optimized states
 class Optimizer:
-    def Simulated_Annealing(self, problem, initial_temp, cooling_rate, max_iterations,strategy="Linear"):
+    def Simulated_Annealing(self, problem,objective, initial_temp, cooling_rate, max_iterations,strategy="Linear"):
         """
         gets the problem's current state and returns an optimized one using SA
         """
+        eval_func = objective if objective is not None else problem.evaluate
 
         current_state = problem.generate_valid_state()
-        current_state_eval = problem.evaluate(current_state)
+        current_state_eval = eval_func(current_state)
 
         best_state_so_far = current_state
         best_state_eval = current_state_eval
@@ -22,12 +24,14 @@ class Optimizer:
                 T *= cooling_rate
             else:
                 T -= cooling_rate
-
-            if T <= 0:
+            
+            # in exp , 0 may never be reachd
+            if T <= 1e-10:
                 break
 
             next_state = problem.move_operator(current_state)
-            next_state_eval = problem.evaluate(next_state)
+            next_state_eval = eval_func(next_state)
+
             Delta_E = next_state_eval - current_state_eval
 
             # we flip the logic here since we want to minimize the evaluation function
@@ -107,5 +111,5 @@ class Optimizer:
                 global_best_val = best_val
 
         return global_best
-  
+
 

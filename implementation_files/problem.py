@@ -188,7 +188,7 @@ class EnsiaProblem(Problem):
     
     def enhance(state):
         # this method is used after generating a random state to resolve constraints using local search
-        padd
+        pass
 
     def generate_neighbors(state, size=50): # returns at most size states
         pass
