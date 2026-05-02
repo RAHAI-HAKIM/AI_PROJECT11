@@ -3,7 +3,6 @@
 class Problem:
     pass
 
-
 class Constraints:
     # includes the constraints functions, seperated for clean structure
     def __init__(self, problem):
