@@ -191,8 +191,11 @@ class EnsiaProblem(Problem):
         # this method is used after generating a random state to resolve constraints using local search
         pass
 
-    def generate_neighbors(self, state, event_id, size=50):
+    def generate_neighbors(self, state, event_id, size=50, shuffle=False):
         # returns at most size states by assigning possible slots to a state
+        if shuffle:
+            random.shuffle(self.slots)
+        
         for slot in self.slots:
             state[event_id] = slot
             for rule in self.hard_constraints_list:
@@ -209,17 +212,19 @@ class EnsiaProblem(Problem):
         # last part on how this function is used and what is expected
         state[event_id] = None
 
-    def move_operator(self, state):
+    def move_operator(self, state, shuffle=False):
         attempted = set()
         event_id = None
 
         while len(attempted) < len(self.events_by_id):
             while event_id in attempted:
+                # There is a high chance the functions returns in the first attempts
+                # Otherwise shuffle events and iterate over them
                 event_id = random.choice(self.events_by_id)
             
             old_slot = state[event_id]
             state[event_id] = None
-            for neighbor in self.generate_neighbors(state, event_id, 2):
+            for neighbor in self.generate_neighbors(state, event_id, size=2, shuffle=shuffle):
                 if state[event_id] != old_slot:
                     return neighbor
             
