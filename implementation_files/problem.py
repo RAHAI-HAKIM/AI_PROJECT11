@@ -1,3 +1,4 @@
+import random
 
 # This is the class that implements main problem method, specific data-driven problems will enhirit from it 
 class Problem:
@@ -204,13 +205,27 @@ class EnsiaProblem(Problem):
                 size -= 1
                 if size <= 0:
                     break
-            state[event] = None
 
         # last part on how this function is used and what is expected
         state[event_id] = None
 
-    def move_operator(self):
-        return self.generate_neighbors(1)
+    def move_operator(self, state):
+        attempted = set()
+        event_id = None
+
+        while len(attempted) < len(self.events_by_id):
+            while event_id in attempted:
+                event_id = random.choice(self.events_by_id)
+            
+            old_slot = state[event_id]
+            state[event_id] = None
+            for neighbor in self.generate_neighbors(state, event_id, 2):
+                if state[event_id] != old_slot:
+                    return neighbor
+            
+            state[event_id] = old_slot
+            attempted.add(event_id)
+        return None
     
     def evaluate(self, state):
         # returnes the cost of a state, may need other constraint-specific methodes
@@ -258,12 +273,12 @@ class EnsiaProblem(Problem):
         for prof_id, sched in prof_schedules.items():
             for pc in prof_constraints:
                 constraint_function = getattr(self.constraint_obj, pc["rule"])
-                profs_cost += constraint_obj.constraint_function(sched, pc["weight"])
+                profs_cost += constraint_function(sched, pc["weight"])
 
         for group_id, sched in group_schedules.items():
             for grc in group_constraints:
-                constraint_function = getattr(self.constraint_obj, gc["rule"])
-                groups_cost += constraint_obj.constraint_function(sched, gc["weight"])
+                constraint_function = getattr(self.constraint_obj, grc["rule"])
+                groups_cost += constraint_function(sched, grc["weight"])
 
             # normalizing constants (may be modified)
             groups_cost /= len(group_schedules)
