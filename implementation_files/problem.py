@@ -708,12 +708,12 @@ class EnsiaProblem(Problem):
         for prof_id, sched in prof_schedules.items():
             for pc in prof_constraints:
                 constraint_function = getattr(self.constraint_obj, pc["rule"])
-                profs_cost += constraint_obj.constraint_function(sched, pc["weight"])
+                profs_cost += self.constraint_obj.constraint_function(sched, pc["weight"])
 
         for group_id, sched in group_schedules.items():
             for grc in group_constraints:
                 constraint_function = getattr(self.constraint_obj, gc["rule"])
-                groups_cost += constraint_obj.constraint_function(sched, gc["weight"])
+                groups_cost += self.constraint_obj.constraint_function(sched, gc["weight"])
 
             # normalizing constants (may be modified)
             groups_cost /= len(group_schedules)
