@@ -1,3 +1,4 @@
+import random
 
 # This is the class that implements main problem method, specific data-driven problems will enhirit from it 
 class Problem:
@@ -657,10 +658,46 @@ class EnsiaProblem(Problem):
         return result
 
 
-    def generate_neighbors(state, size=50): # returns at most size states
-        pass
-    def move_operator(self):
-        return self.generate_neighbors(1)
+    def generate_neighbors(self, state, event_id, size=50, shuffle=False):
+        # returns at most size states by assigning possible slots to a state
+        if shuffle:
+            random.shuffle(self.slots)
+        
+        for slot in self.slots:
+            state[event_id] = slot
+            for rule in self.hard_constraints_list:
+                rule_function = getattr(self.constraint_obj, rule)
+                if rule_function(state):
+                    break
+            else:
+                # if no hard constraint is violated, i.e. for loop terminated without breaking
+                yield state
+                size -= 1
+                if size <= 0:
+                    break
+
+        # last part on how this function is used and what is expected
+        state[event_id] = None
+
+    def move_operator(self, state, shuffle=False):
+        attempted = set()
+        event_id = None
+
+        while len(attempted) < len(self.events_by_id):
+            while event_id in attempted:
+                # There is a high chance the functions returns in the first attempts
+                # Otherwise shuffle events and iterate over them
+                event_id = random.choice(self.events_by_id)
+            
+            old_slot = state[event_id]
+            state[event_id] = None
+            for neighbor in self.generate_neighbors(state, event_id, size=2, shuffle=shuffle):
+                if state[event_id] != old_slot:
+                    return neighbor
+            
+            state[event_id] = old_slot
+            attempted.add(event_id)
+        return None
     
     def evaluate(self, state):
         # returnes the cost of a state, may need other constraint-specific methodes
@@ -708,12 +745,12 @@ class EnsiaProblem(Problem):
         for prof_id, sched in prof_schedules.items():
             for pc in prof_constraints:
                 constraint_function = getattr(self.constraint_obj, pc["rule"])
-                profs_cost += constraint_obj.constraint_function(sched, pc["weight"])
+                profs_cost += constraint_function(sched, pc["weight"])
 
         for group_id, sched in group_schedules.items():
             for grc in group_constraints:
-                constraint_function = getattr(self.constraint_obj, gc["rule"])
-                groups_cost += constraint_obj.constraint_function(sched, gc["weight"])
+                constraint_function = getattr(self.constraint_obj, grc["rule"])
+                groups_cost += constraint_function(sched, grc["weight"])
 
             # normalizing constants (may be modified)
             groups_cost /= len(group_schedules)
