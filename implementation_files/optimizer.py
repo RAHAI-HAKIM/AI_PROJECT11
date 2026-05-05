@@ -55,60 +55,48 @@ class Optimizer:
     def Hill_Climbing(self, problem, strategy="steepest"):
         current_state = problem.generate_valid_state()
         current_eval = problem.evaluate(current_state)
-
         while True:
             neighbors = problem.generate_neighbors(current_state, size=20)
             if not neighbors:
                 break
-
             next_state = None
-
             if strategy == "steepest":
                 best_neighbor = min(neighbors, key=lambda n: problem.evaluate(n))
                 if problem.evaluate(best_neighbor) < current_eval:
                     next_state = best_neighbor
-            
             elif strategy == "first_choice":
                 for n in neighbors:
                     if problem.evaluate(n) < current_eval:
                         next_state = n
                         break
-
             if next_state is not None:
                 current_state = next_state
                 current_eval = problem.evaluate(current_state)
             else:
                 break 
-
         return current_state
 
     def Random_Restart_Hill_Climbing(self, problem, base_strategy="steepest", num_restarts=50):
         global_best_state = None
         global_best_eval = float('inf')
-        
         num_events = len(problem.events)
         num_slots = len(problem.slots)
         density_map = nump.full((num_events, num_slots), 1.0 / num_slots)
-
         for every in range(num_restarts):
             current_state = {}
             for idx, event_id in enumerate(problem.events_by_id.keys()):
                 slot_idx = nump.random.choice(num_slots, p=density_map[idx])
                 current_state[event_id] = problem.slots[slot_idx]
-
             result_state = self.Hill_Climbing(problem, strategy=base_strategy)
             result_eval = problem.evaluate(result_state)
-
             if result_eval < global_best_eval:
                 global_best_state = result_state
                 global_best_eval = result_eval
-                
                 for idx, event_id in enumerate(problem.events_by_id.keys()):
                     assigned_pos = result_state[event_id]
                     slot_idx = problem.slots.index(assigned_pos)
                     density_map[idx][slot_idx] += 0.1 
                     density_map[idx] /= density_map[idx].sum()
-
         return global_best_state
         
     def tabu_random_restarts(problem, restarts=5, iters=300, tabu_size=20):
