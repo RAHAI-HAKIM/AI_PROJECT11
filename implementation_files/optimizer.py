@@ -53,6 +53,13 @@ class Optimizer:
         return best_state_so_far, best_state_eval
 
     def Hill_Climbing(self, problem, objective=None, strategy="steepest"):
+        """
+        Iteratively moves to a better neighbor until no improvement is found.
+        strategy:
+            'steepest'    — picks the best neighbor overall.
+            'first_choice'— picks the first improving neighbor.
+            'stochastic'  — picks a random improving neighbor.
+        """
         eval_func     = objective if objective else problem.evaluate
         current_state = dict(problem.state)
         current_eval  = eval_func(current_state) 
@@ -88,6 +95,11 @@ class Optimizer:
         return current_state, current_eval 
 
     def Random_Restart_Hill_Climbing(self, problem,objective=None, base_strategy="steepest", num_restarts=50):
+        """
+        Runs Hill_Climbing multiple times from different starting points to escape local optima.
+        First restart starts from problem.state, subsequent ones use a density-guided random state
+        that is biased toward slots that performed well in previous restarts.
+        """
         eval_func = objective if objective else problem.evaluate
         global_best_state = None
         global_best_eval = float('inf')
@@ -111,7 +123,12 @@ class Optimizer:
                     density_map[idx] /= density_map[idx].sum()
         return global_best_state
         
-    def Tabu_Search(self, problem, objective=None, restarts=5, iters=300, tabu_size=20):  # Fix #5: added self
+    def Tabu_Search(self, problem, objective=None, restarts=5, iters=300, tabu_size=20):
+        """
+        Explores neighbors while maintaining a tabu list to avoid revisiting recent states.
+        First restart starts from problem.state, subsequent ones use generate_random_state().
+        tabu_size controls how many recent states are blacklisted at any time.
+        """
         eval_func       = objective if objective else problem.evaluate
         global_best     = None
         global_best_val = float("inf")
@@ -131,7 +148,7 @@ class Optimizer:
                 neighbors = problem.generate_neighbors(state, size=20) 
     
                 for st in neighbors:
-                    t = tuple(sorted(st.items()))  # fix: dict has no slice, use sorted items as key
+                    t = tuple(sorted(st.items())) 
                     if t not in tabu_set:
                         val = eval_func(st)
                         if val < best_candidate_val:
