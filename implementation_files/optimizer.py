@@ -11,7 +11,7 @@ class Optimizer:
         """
         eval_func = objective if objective is not None else problem.evaluate
 
-        current_state = problem.generate_valid_state()
+        current_state      = dict(problem.state)
         current_state_eval = eval_func(current_state)
 
         best_state_so_far = current_state
@@ -50,32 +50,42 @@ class Optimizer:
                 best_state_so_far = current_state
                 best_state_eval = current_state_eval
 
-        return best_state_so_far
+        return best_state_so_far, best_state_eval
 
-    def Hill_Climbing(self, problem,objective = None, strategy="steepest"):
-        eval_func = objective if objective else problem.evaluate
-        current_state = problem.generate_valid_state()
-        current_eval = problem.evaluate(current_state)
+    def Hill_Climbing(self, problem, objective=None, strategy="steepest"):
+        eval_func     = objective if objective else problem.evaluate
+        current_state = dict(problem.state)
+        current_eval  = eval_func(current_state) 
+    
         while True:
             neighbors = problem.generate_neighbors(current_state, size=20)
             if not neighbors:
                 break
             next_state = None
+    
             if strategy == "steepest":
                 best_neighbor = min(neighbors, key=lambda n: eval_func(n))
                 if eval_func(best_neighbor) < current_eval:
                     next_state = best_neighbor
+    
             elif strategy == "first_choice":
                 for n in neighbors:
                     if eval_func(n) < current_eval:
                         next_state = n
                         break
+                        
+            elif strategy == "stochastic":
+                improving = [n for n in neighbors if eval_func(n) < current_eval]
+                if improving:
+                    next_state = random.choice(improving)
+    
             if next_state is not None:
                 current_state = next_state
-                current_eval = eval_func(current_state)
+                current_eval  = eval_func(current_state)
             else:
-                break 
-        return current_state
+                break
+    
+        return current_state, current_eval 
 
     def Random_Restart_Hill_Climbing(self, problem,objective=None, base_strategy="steepest", num_restarts=50):
         eval_func = objective if objective else problem.evaluate
@@ -101,58 +111,51 @@ class Optimizer:
                     density_map[idx] /= density_map[idx].sum()
         return global_best_state
         
-    def tabu_random_restarts(problem, objective=None, restarts=5, iters=300, tabu_size=20):
-        eval_func = objective if objective else problem.evaluate
-        
-        global_best = None
+    def Tabu_Search(self, problem, objective=None, restarts=5, iters=300, tabu_size=20):  # Fix #5: added self
+        eval_func       = objective if objective else problem.evaluate
+        global_best     = None
         global_best_val = float("inf")
-
-        for _ in range(restarts):
-            state = problem.random_state()
-            best = state[:]
+    
+        for restart in range(restarts):
+            state    = dict(problem.state) if restart == 0 else dict(problem.generate_random_state())
+            best     = dict(state)
             best_val = eval_func(state)
-
+    
             tabu_queue = deque()
-            tabu_set = set()
-
+            tabu_set   = set()
+    
             for _ in range(iters):
-                best_candidate = None
+                best_candidate     = None
                 best_candidate_val = float("inf")
-
-                neighbors = problem.neighbors(state)
-
+    
+                neighbors = problem.generate_neighbors(state, size=20) 
+    
                 for st in neighbors:
-                    t = tuple(st)
-
+                    t = tuple(sorted(st.items()))  # fix: dict has no slice, use sorted items as key
                     if t not in tabu_set:
                         val = eval_func(st)
-
                         if val < best_candidate_val:
-                            best_candidate = st
+                            best_candidate     = st
                             best_candidate_val = val
-
+    
                 if best_candidate is None:
                     break
-
-                state = best_candidate[:]
-                t = tuple(state)
-
+    
+                state = dict(best_candidate) 
+                t     = tuple(sorted(state.items()))
                 tabu_queue.append(t)
                 tabu_set.add(t)
-
+    
                 if len(tabu_queue) > tabu_size:
-                    old = tabu_queue.popleft()
-                    tabu_set.remove(old)
-
+                    tabu_set.discard(tabu_queue.popleft())
+    
                 if best_candidate_val < best_val:
-                    best = state[:]
+                    best     = dict(state) 
                     best_val = best_candidate_val
-
-
+    
             if best_val < global_best_val:
-                global_best = best[:]
+                global_best     = dict(best)
                 global_best_val = best_val
-
-        return global_best
-
+    
+        return global_best, global_best_val 
 
