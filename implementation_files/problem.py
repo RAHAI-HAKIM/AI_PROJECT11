@@ -435,7 +435,7 @@ class EnsiaProblem(Problem):
         self.events = data[3]
         self.groups = data[2]
         # a table that stores the assignment of groups to section section_id => [group_id, group_id, ..]
-        self.section_to_group = {section : [] for section in data[1]}
+        self.section_to_group = {section["id"]: [] for section in data[1]}
         for group in self.groups: self.section_to_group[group["section_id"]].append(group["id"])
         # access data elements by their id
         self.events_by_id = {e["id"]: e for e in self.events}
@@ -483,7 +483,6 @@ class EnsiaProblem(Problem):
         """
         import json
         import os
-
         # Check if file exists to avoid crashes
         if not os.path.exists(filename):
             raise FileNotFoundError(f"Dataset file {filename} not found.")
@@ -701,7 +700,11 @@ class EnsiaProblem(Problem):
         return None
     
     def evaluate(self, state):
-        # returnes the cost of a state, may need other constraint-specific methodes
+        """
+        returnes the cost of a state
+        calls soft-constraints' functions with their weights
+        soft constraints grouped into categories for min time complexity
+        """ 
         groups_cost = 0
         profs_cost = 0
         add_cost = 0
@@ -759,6 +762,11 @@ class EnsiaProblem(Problem):
         return 0.6 * groups_cost + 0.4 * profs_cost + add_cost # parameters to be modified
 
     def evaluate_csp(self, state):
+        """
+        Evaluates a -potentially- not valid states using the min-conflicts heuristic
+        calls hard constraint functions with -count- flag to return # of violations
+        The goal is to return 0 (valid state)
+        """
 
         slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = self.constraint_obj._build_lookup_tables(state)
         c = self.constraint_obj
@@ -779,3 +787,6 @@ class EnsiaProblem(Problem):
         return violations # parameters to be modified
         
 
+if __name__ == "__main__":
+    problem = EnsiaProblem('dataset/data_s2.json', "global")
+    print(problem.state)
