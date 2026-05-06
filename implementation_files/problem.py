@@ -450,8 +450,9 @@ class EnsiaProblem(Problem):
         self.slots = slots
         
         # get constraint list -not handled yet-
-        self.hard_constraints_list = [con["hard"] for con in data[4] if "hard" in data[4]] # explicit list of hard constraints
-        self.soft_constraints_list = [con["soft"] for con in data[4] if "soft" in data[4]] # list of soft constraints in the form (rule, weight)
+        self.hard_constraints_list = data[4].get("hard", [])  # explicit list of hard constraints
+        self.soft_constraints_list = data[4].get("soft", [])  # list of soft constraints in the form (rule, weight)
+         
 
         # constraint object to hold the methods
         self.constraint_obj = Constraints(self)
