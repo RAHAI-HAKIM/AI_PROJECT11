@@ -5727,57 +5727,90 @@
     ],
     "constraints": {
         "hard": [
-            "NO_GROUP_DOUBLE_BOOKING",
-            "NO_TEACHER_DOUBLE_BOOKING",
-            "NO_ROOM_DOUBLE_BOOKING",
-            "ROOM_CAPACITY_GEQ_HEADCOUNT",
-            "MATCH_ROOM_TYPE",
-            "TEACHER_MIN_HOURS_9",
-            "TEACHER_MAX_HOURS_17",
-            "TEACHER_MAX_COURSES_2",
-            "SEPARATE_LECTURE_PRACTICE",
-            "CONSECUTIVE_SECTION_LECTURES",
-            "MAX_CONSECUTIVE_STUDENT_SLOTS_3"
+            {
+                "rule": "NO_ROOM_DOUBLE_BOOKING",
+                "category": "slot_to_rooms"
+            },
+            {
+                "rule": "NO_GROUP_DOUBLE_BOOKING",
+                "category": "slot_to_groups"
+            },
+            {
+                "rule": "NO_TEACHER_DOUBLE_BOOKING",
+                "category": "slot_to_teachers"
+            },
+            {
+                "rule": "ROOM_CAPACITY_GEQ_HEADCOUNT",
+                "category": "state_based"
+            },
+            {
+                "rule": "MATCH_ROOM_TYPE",
+                "category": "state_based"
+            },
+            {
+                "rule": "SEPARATE_LECTURE_PRACTICE",
+                "category": "state_based"
+            },
+            {
+                "rule": "CONSECUTIVE_SECTION_LECTURES",
+                "category": "state_based"
+            },
+            {
+                "rule": "MAX_CONSECUTIVE_STUDENT_SLOTS_3",
+                "category": "state_based"
+            },
+            {
+                "rule": "TEACHER_MIN_HOURS_9",
+                "category": "teacher_based"
+            },
+            {
+                "rule": "TEACHER_MAX_HOURS_17",
+                "category": "teacher_based"
+            },
+            {
+                "rule": "TEACHER_MAX_COURSES_2",
+                "category": "teacher_based"
+            }
         ],
         "soft": [
             {
-                "rule": "MINIMIZE_GROUP_GAPS",
+                "rule": "MINIMIZE_GAPS",
+                "category": "group-prof",
                 "weight": 1.0
             },
             {
                 "rule": "MINIMIZE_TEACHER_DAYS",
+                "category": "prof",
                 "weight": 1.0
             },
             {
                 "rule": "MORNING_LECTURES",
+                "category": "general",
                 "weight": 0.8
             },
             {
-                "rule": "BLOCK_SIMILAR_ACTIVITIES",
+                "rule": "SIMILAR_ACTIVITIES",
+                "category": "external",
                 "weight": 0.8
             },
             {
                 "rule": "AVOID_THURSDAY_AFTERNOON",
+                "category": "group-prof",
                 "weight": 0.7
             },
             {
                 "rule": "AVOID_LAST_SLOT",
+                "category": "group-prof",
                 "weight": 0.7
             },
             {
-                "rule": "MINIMIZE_STUDENT_ROOM_CHANGES",
+                "rule": "MINIMIZE_ROOM_CHANGES",
+                "category": "group-prof",
                 "weight": 0.5
-            },
-            {
-                "rule": "TARGET_TEACHER_AVG_12H",
-                "weight": 0.5
-            },
-            {
-                "rule": "MAX_TWO_BLOCKS_PER_DAY",
-                "weight": 0.4
             },
             {
                 "rule": "MINIMIZE_WASTED_SEATS",
+                "category": "external",
                 "weight": 0.2
             }
         ]
