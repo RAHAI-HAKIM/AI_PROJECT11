@@ -1,5 +1,3 @@
-import random
-
 # This is the class that implements main problem method, specific data-driven problems will enhirit from it 
 class Problem:
     pass
@@ -139,82 +137,6 @@ class Constraints:
             event = self.problem.events_by_id[event_id]
             room  = self.problem.rooms_by_id[roomid]
             if room["room_type_id"] != event["required_room_type_id"]:
-                if not count: return False
-                violations += 1
-        return violations if count else True
-
-    # TEACHER WORKLOAD
-
-    def _teacher_total_hours(self, teacher_events):
-        """
-        Helper method to calculate the total assigned teaching hours for each teacher.
-
-        Args:
-            teacher_events (dict): Mapping of teacher IDs to lists of their assigned event IDs.
-
-        Returns:
-            dict: Mapping of teacher_id -> total_hours (float).
-        """
-        from collections import defaultdict
-        hours = defaultdict(float)
-        for teacher_id, event_ids in teacher_events.items():
-            for eid in event_ids:
-                hours[teacher_id] += self.problem.events_by_id[eid]["duration_hours"]
-        return hours
-
-    def TEACHER_MIN_HOURS_9(self, teacher_events, count=True):
-        """
-        Ensures each active teacher meets the minimum required workload of 9 hours.
-
-        Args:
-            teacher_events (dict): Mapping of teacher IDs to lists of their assigned event IDs.
-            count (bool): If True, returns the violation count. If False, returns False on the first violation.
-
-        Returns:
-            int | bool: The number of violations, or a boolean indicating validity.
-        """
-        violations = 0
-        hours = self._teacher_total_hours(teacher_events)
-        for teacher_id, h in hours.items():
-            if h < 9:
-                if not count: return False
-                violations += 1
-        return violations if count else True
-
-    def TEACHER_MAX_HOURS_17(self, teacher_events, count=True):
-        """
-        Ensures no teacher exceeds the maximum allowed workload of 17 hours.
-
-        Args:
-            teacher_events (dict): Mapping of teacher IDs to lists of their assigned event IDs.
-            count (bool): If True, returns the violation count. If False, returns False on the first violation.
-
-        Returns:
-            int | bool: The number of violations, or a boolean indicating validity.
-        """
-        violations = 0
-        hours = self._teacher_total_hours(teacher_events)
-        for teacher_id, h in hours.items():
-            if h > 17:
-                if not count: return False
-                violations += 1
-        return violations if count else True
-
-    def TEACHER_MAX_COURSES_2(self, teacher_events, count=True):
-        """
-        Ensures a teacher is not assigned to teach more than 2 distinct courses.
-
-        Args:
-            teacher_events (dict): Mapping of teacher IDs to lists of their assigned event IDs.
-            count (bool): If True, returns the violation count. If False, returns False on the first violation.
-
-        Returns:
-            int | bool: The number of violations, or a boolean indicating validity.
-        """
-        violations = 0
-        for teacher_id, event_ids in teacher_events.items():
-            courses = {self.problem.events_by_id[eid]["course_name"] for eid in event_ids}
-            if len(courses) > 2:
                 if not count: return False
                 violations += 1
         return violations if count else True
@@ -378,10 +300,12 @@ class Constraints:
         return gaps * weight
 
     def AVOID_THURSDAY_AFTERNOON(self, schedule, weight):
-        slots = [0, 0, 0] # 3 sessions of thursday afternoon
-        for i in range(3):
-            slots[i] = 1 if any(slots == 27 + i for room, slot in schedule) else 0
-        return (slots[0] + 2*slots[1] + 3*slots[2]) * weight
+        thursday_afternoon = {27, 28, 29}
+        slots = [0, 0, 0]
+        for room, slot in schedule:
+            if slot in thursday_afternoon:
+                slots[slot - 27] = 1
+        return (slots[0] + 2 * slots[1] + 3 * slots[2]) * weight
 
     def AVOID_LAST_SLOT(self, schedule, weight):
         count = 0
@@ -435,7 +359,7 @@ class EnsiaProblem(Problem):
         self.events = data[3]
         self.groups = data[2]
         # a table that stores the assignment of groups to section section_id => [group_id, group_id, ..]
-        self.section_to_group = {section["id"]: [] for section in data[1]}
+        self.section_to_group = {section["id"] : [] for section in data[1]}
         for group in self.groups: self.section_to_group[group["section_id"]].append(group["id"])
         # access data elements by their id
         self.events_by_id = {e["id"]: e for e in self.events}
@@ -450,9 +374,8 @@ class EnsiaProblem(Problem):
         self.slots = slots
         
         # get constraint list -not handled yet-
-        self.hard_constraints_list = data[4].get("hard", [])  # explicit list of hard constraints
-        self.soft_constraints_list = data[4].get("soft", [])  # list of soft constraints in the form (rule, weight)
-         
+        self.hard_constraints_list = data[4].get("hard", [])
+        self.soft_constraints_list = data[4].get("soft", [])
 
         # constraint object to hold the methods
         self.constraint_obj = Constraints(self)
@@ -483,6 +406,7 @@ class EnsiaProblem(Problem):
         """
         import json
         import os
+
         # Check if file exists to avoid crashes
         if not os.path.exists(filename):
             raise FileNotFoundError(f"Dataset file {filename} not found.")
@@ -499,9 +423,7 @@ class EnsiaProblem(Problem):
             raw_data.get("activities", []),
             raw_data.get("constraints", {})
         ]
- 
-
-
+    
     # CSP Global
 
     def _get_event_groups(self, event):
@@ -680,7 +602,7 @@ class EnsiaProblem(Problem):
 
         return removals
 
-    def _backtrack(self, unassigned_set, state, neighbours):
+    def _bt(self, unassigned_set, state, neighbours):
         """
         Executes a recursive backtracking search to assign rooms and time slots to all events.
         Uses Minimum Remaining Values (MRV) to pick the next event and Forward Checking to 
@@ -892,10 +814,6 @@ class EnsiaProblem(Problem):
             rule = hc["rule"]
             if rule in forward_checked_rules:
                 continue 
-            
-            # This rule can only be properly checked if the entire schedule is filled
-            if rule == "TEACHER_MIN_HOURS_9" and not is_complete:
-                continue 
 
             # Dynamically call the constraint function and fail if it returns False
             fn   = getattr(c, rule)
@@ -904,7 +822,7 @@ class EnsiaProblem(Problem):
                 return False
                 
         return True
-
+    
     # CSP Local
 
     def generate_random_state(self):
@@ -919,7 +837,7 @@ class EnsiaProblem(Problem):
         shuffled_slots = random.sample(self.slots, len(self.events))
         return {event["id"]: slot for event, slot in zip(self.events, shuffled_slots)}
 
-    def enhance(self, state, method="hill_climbing_steepest"):
+    def enhance(self, state, method="hill_climbing_steepest", objective=None):
         """
         Applies a local search algorithm to iteratively improve a schedule 
         by resolving hard constraint violations. Includes random restarts to escape local optima.
@@ -937,15 +855,18 @@ class EnsiaProblem(Problem):
         from optimizer import Optimizer
         opt = Optimizer()
 
+        if objective is None:
+            objective = self.evaluate_csp  # default to hard constraints
+
         MAX_RESTARTS = 20
         current = dict(state)
 
         method_map = {
-            "hill_climbing_steepest":        (opt.Hill_Climbing,               {"strategy": "steepest"}),
-            "hill_climbing_first":           (opt.Hill_Climbing,               {"strategy": "first_choice"}),
-            "hill_climbing_stochastic":      (opt.Hill_Climbing,               {"strategy": "stochastic"}),
+            "hill_climbing_steepest":        (opt.Hill_Climbing,                {"strategy": "steepest"}),
+            "hill_climbing_first":           (opt.Hill_Climbing,                {"strategy": "first_choice"}),
+            "hill_climbing_stochastic":      (opt.Hill_Climbing,                {"strategy": "stochastic"}),
             "hill_climbing_random_restart":  (opt.Random_Restart_Hill_Climbing, {}),
-            "simulated_annealing":           (opt.Simulated_Annealing,         {}),
+            "simulated_annealing":           (opt.Simulated_Annealing,         {"initial_temp": 100.0, "cooling_rate": 0.1, "max_iterations": 1000}),
             "tabu_search":                   (opt.Tabu_Search,                 {}),
         }
         if method not in method_map:
@@ -955,7 +876,7 @@ class EnsiaProblem(Problem):
 
         for _ in range(MAX_RESTARTS):
             self.state = current
-            result, cost = search_fn(problem=self, objective=self.evaluate_csp, **kwargs)
+            result, cost = search_fn(problem=self, objective=objective, **kwargs)
 
             if cost == 0:
                 return result
@@ -971,14 +892,19 @@ class EnsiaProblem(Problem):
 
 
     def generate_neighbors(self, state, event_id, size=50, shuffle=False):
+        import random
+
         # returns at most size states by assigning possible slots to a state
         if shuffle:
             random.shuffle(self.slots)
         
+        original_slot = state[event_id]
+
         for slot in self.slots:
             state[event_id] = slot
-            for rule in self.hard_constraints_list:
-                rule_function = getattr(self.constraint_obj, rule)
+            for hc in self.hard_constraints_list:
+                if isinstance(hc, str): continue 
+                rule_function = getattr(self.constraint_obj, hc["rule"]) 
                 if rule_function(state):
                     break
             else:
@@ -989,98 +915,88 @@ class EnsiaProblem(Problem):
                     break
 
         # last part on how this function is used and what is expected
-        state[event_id] = None
+        state[event_id] = original_slot
 
     def move_operator(self, state, shuffle=False):
-        attempted = set()
-        event_id = None
+        import random
 
-        while len(attempted) < len(self.events_by_id):
+        attempted = set()
+        valid_events = list(state.keys())
+
+        while len(attempted) < len(valid_events):
+            event_id = random.choice(valid_events)
             while event_id in attempted:
-                # There is a high chance the functions returns in the first attempts
-                # Otherwise shuffle events and iterate over them
-                event_id = random.choice(self.events_by_id)
+                event_id = random.choice(valid_events)
             
             old_slot = state[event_id]
             state[event_id] = None
+            
             for neighbor in self.generate_neighbors(state, event_id, size=2, shuffle=shuffle):
-                if state[event_id] != old_slot:
-                    return neighbor
+                state[event_id] = old_slot
+                return neighbor
             
             state[event_id] = old_slot
             attempted.add(event_id)
-        return None
+            
+        return state
     
     def evaluate(self, state):
-        """
-        returnes the cost of a state
-        calls soft-constraints' functions with their weights
-        soft constraints grouped into categories for min time complexity
-        """ 
-        groups_cost = 0
-        profs_cost = 0
-        add_cost = 0
-        # initialize empty timetables for each group and prof
-        group_schedules = {g : [] for g in self.groups_by_id}
-        prof_schedules = {}
-        # devide constraints
+        groups_cost = 0.0
+        profs_cost  = 0.0
+        add_cost    = 0.0
+
+        group_schedules = {g: [] for g in self.groups_by_id}
+        prof_schedules  = {}
+
         external_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "external"]
-        general_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "general"]
-        group_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "group" or sc["category"] == "group-prof"]
-        prof_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "prof" or sc["category"] == "group-prof"]
+        general_constraints  = [sc for sc in self.soft_constraints_list if sc["category"] == "general"]
+        group_constraints    = [sc for sc in self.soft_constraints_list if sc["category"] in ("group", "group-prof")]
+        prof_constraints     = [sc for sc in self.soft_constraints_list if sc["category"] in ("prof",  "group-prof")]
 
         for ec in external_constraints:
             constraint_function = getattr(self.constraint_obj, ec["rule"])
             add_cost += constraint_function(state, ec["weight"])
 
-
         for event_id, (roomid, slot) in state.items():
-            event_data = self.events_by_id(event_id)
+            event_data = self.events_by_id[event_id]   # fix: [] not ()
             if not event_data: continue
 
-            prof_id = event_data["teacher_id"]
-            target_id = event_data["target_id"] # may be a section
+            prof_id   = event_data["teacher_id"]
+            target_id = event_data["target_id"]
 
-            # general constraits
-            for gc in general_constraints: 
+            for gc in general_constraints:
                 constraint_function = getattr(self.constraint_obj, gc["rule"])
                 add_cost += constraint_function(event_data, roomid, slot, gc["weight"])
-            # fill in group and prof schedules
-            if prof_id not in prof_schedules: prof_schedules[prof_id] = []
-            prof_schedules[prof_id].append((roomid, slot))
-            
-            if event_data["type"] == 1: # if the event is a lecture, add it to all the groups of that section
-                for group_id in self.section_to_group[target_id]:
-                    group_schedules[group_id] = []
-                    group_schedules[group_id] .append((roomid, slot))
-            else:
-                group_schedules[target_id] = []
-                group_schedules[target_id] .append((roomid, slot))
 
-            # handle each prof and group alone
+            if prof_id not in prof_schedules:
+                prof_schedules[prof_id] = []
+            prof_schedules[prof_id].append((roomid, slot))
+
+            if event_data["type_id"] == 1:              # fix: type_id not type
+                for group_id in self.section_to_group[target_id]:
+                    group_schedules[group_id].append((roomid, slot))   # fix: no reset
+            else:
+                group_schedules[target_id].append((roomid, slot))      # fix: no reset
+
         for prof_id, sched in prof_schedules.items():
             for pc in prof_constraints:
                 constraint_function = getattr(self.constraint_obj, pc["rule"])
-                profs_cost += self.constraint_obj.constraint_function(sched, pc["weight"])
+                profs_cost += constraint_function(sched, pc["weight"])  # fix: local fn
 
         for group_id, sched in group_schedules.items():
             for grc in group_constraints:
-                constraint_function = getattr(self.constraint_obj, gc["rule"])
-                groups_cost += self.constraint_obj.constraint_function(sched, gc["weight"])
+                constraint_function = getattr(self.constraint_obj, grc["rule"])  # fix: grc
+                groups_cost += constraint_function(sched, grc["weight"])
 
-            # normalizing constants (may be modified)
-            groups_cost /= len(group_schedules)
-            profs_cost /= len(prof_schedules)
-        return 0.6 * groups_cost + 0.4 * profs_cost + add_cost # parameters to be modified
+        # fix: normalise outside the loop, guard against empty
+        if group_schedules: groups_cost /= len(group_schedules)
+        if prof_schedules:  profs_cost  /= len(prof_schedules)
+
+        return 0.6 * groups_cost + 0.4 * profs_cost + add_cost
 
     def evaluate_csp(self, state):
-        """
-        Evaluates a -potentially- not valid states using the min-conflicts heuristic
-        calls hard constraint functions with -count- flag to return # of violations
-        The goal is to return 0 (valid state)
-        """
-
-        slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = self.constraint_obj._build_lookup_tables(state)
+        slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = \
+            self.constraint_obj._build_lookup_tables(state)
         c = self.constraint_obj
 
         category_args = {
@@ -1093,12 +1009,8 @@ class EnsiaProblem(Problem):
 
         violations = 0
         for hc in self.hard_constraints_list:
+            if isinstance(hc, str): continue
             fn   = getattr(c, hc["rule"])
             args = category_args[hc["category"]]
             violations += fn(*args, count=True)
-        return violations # parameters to be modified
-        
-
-if __name__ == "__main__":
-    problem = EnsiaProblem('dataset/data_s2.json', "global")
-    print(problem.state)
+        return violations
