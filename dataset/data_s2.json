@@ -6072,18 +6072,6 @@
             {
                 "rule": "MAX_CONSECUTIVE_STUDENT_SLOTS_3",
                 "category": "state_based"
-            },
-            {
-                "rule": "TEACHER_MIN_HOURS_9",
-                "category": "teacher_based"
-            },
-            {
-                "rule": "TEACHER_MAX_HOURS_17",
-                "category": "teacher_based"
-            },
-            {
-                "rule": "TEACHER_MAX_COURSES_2",
-                "category": "teacher_based"
             }
         ],
         "soft": [
