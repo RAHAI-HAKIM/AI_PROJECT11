@@ -60,39 +60,42 @@ class Optimizer:
             'first_choice'— picks the first improving neighbor.
             'stochastic'  — picks a random improving neighbor.
         """
+        import random
         eval_func     = objective if objective else problem.evaluate
         current_state = dict(problem.state)
-        current_eval  = eval_func(current_state) 
-    
+        current_eval  = eval_func(current_state)
+
         while True:
-            neighbors = problem.generate_neighbors(current_state, size=20)
+            event_id  = random.choice(list(current_state.keys()))
+            neighbors = list(problem.generate_neighbors(current_state, event_id, size=20))
             if not neighbors:
                 break
+
             next_state = None
-    
+
             if strategy == "steepest":
                 best_neighbor = min(neighbors, key=lambda n: eval_func(n))
                 if eval_func(best_neighbor) < current_eval:
                     next_state = best_neighbor
-    
+
             elif strategy == "first_choice":
                 for n in neighbors:
                     if eval_func(n) < current_eval:
                         next_state = n
                         break
-                        
+
             elif strategy == "stochastic":
                 improving = [n for n in neighbors if eval_func(n) < current_eval]
                 if improving:
                     next_state = random.choice(improving)
-    
+
             if next_state is not None:
-                current_state = next_state
+                current_state = dict(next_state)
                 current_eval  = eval_func(current_state)
             else:
                 break
-    
-        return current_state, current_eval 
+
+        return current_state, current_eval
 
     def Random_Restart_Hill_Climbing(self, problem,objective=None, base_strategy="steepest", num_restarts=50):
         """
@@ -144,11 +147,14 @@ class Optimizer:
             for _ in range(iters):
                 best_candidate     = None
                 best_candidate_val = float("inf")
-    
-                neighbors = problem.generate_neighbors(state, size=20) 
+
+                valid_events = list(state.keys())
+                event_id = random.choice(valid_events)
+            
+                neighbors = problem.generate_neighbors(state, event_id, size=20)
     
                 for st in neighbors:
-                    t = tuple(sorted(st.items())) 
+                    t = tuple(sorted(st.items()))
                     if t not in tabu_set:
                         val = eval_func(st)
                         if val < best_candidate_val:
