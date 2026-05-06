@@ -52,7 +52,8 @@ class Optimizer:
 
         return best_state_so_far
 
-    def Hill_Climbing(self, problem, strategy="steepest"):
+    def Hill_Climbing(self, problem,objective = None, strategy="steepest"):
+        eval_func = objective if objective else problem.evaluate
         current_state = problem.generate_valid_state()
         current_eval = problem.evaluate(current_state)
         while True:
@@ -61,22 +62,23 @@ class Optimizer:
                 break
             next_state = None
             if strategy == "steepest":
-                best_neighbor = min(neighbors, key=lambda n: problem.evaluate(n))
-                if problem.evaluate(best_neighbor) < current_eval:
+                best_neighbor = min(neighbors, key=lambda n: eval_func(n))
+                if eval_func(best_neighbor) < current_eval:
                     next_state = best_neighbor
             elif strategy == "first_choice":
                 for n in neighbors:
-                    if problem.evaluate(n) < current_eval:
+                    if eval_func(n) < current_eval:
                         next_state = n
                         break
             if next_state is not None:
                 current_state = next_state
-                current_eval = problem.evaluate(current_state)
+                current_eval = eval_func(current_state)
             else:
                 break 
         return current_state
 
-    def Random_Restart_Hill_Climbing(self, problem, base_strategy="steepest", num_restarts=50):
+    def Random_Restart_Hill_Climbing(self, problem,objective=None, base_strategy="steepest", num_restarts=50):
+        eval_func = objective if objective else problem.evaluate
         global_best_state = None
         global_best_eval = float('inf')
         num_events = len(problem.events)
@@ -88,7 +90,7 @@ class Optimizer:
                 slot_idx = nump.random.choice(num_slots, p=density_map[idx])
                 current_state[event_id] = problem.slots[slot_idx]
             result_state = self.Hill_Climbing(problem, strategy=base_strategy)
-            result_eval = problem.evaluate(result_state)
+            result_eval = eval_func(result_state)
             if result_eval < global_best_eval:
                 global_best_state = result_state
                 global_best_eval = result_eval
@@ -99,15 +101,16 @@ class Optimizer:
                     density_map[idx] /= density_map[idx].sum()
         return global_best_state
         
-    def tabu_random_restarts(problem, restarts=5, iters=300, tabu_size=20):
-    
+    def tabu_random_restarts(problem, objective=None, restarts=5, iters=300, tabu_size=20):
+        eval_func = objective if objective else problem.evaluate
+        
         global_best = None
         global_best_val = float("inf")
 
         for _ in range(restarts):
             state = problem.random_state()
             best = state[:]
-            best_val = problem.evaluate(state)
+            best_val = eval_func(state)
 
             tabu_queue = deque()
             tabu_set = set()
@@ -122,7 +125,7 @@ class Optimizer:
                     t = tuple(st)
 
                     if t not in tabu_set:
-                        val = problem.evaluate(st)
+                        val = eval_func(st)
 
                         if val < best_candidate_val:
                             best_candidate = st
