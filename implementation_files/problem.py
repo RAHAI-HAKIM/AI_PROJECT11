@@ -942,7 +942,7 @@ class EnsiaProblem(Problem):
 
         method_map = {
             "hill_climbing_steepest":        (opt.Hill_Climbing,               {"strategy": "steepest"}),
-            "hill_climbing_first":           (opt.Hill_Climbing,               {"strategy": "first"}),
+            "hill_climbing_first":           (opt.Hill_Climbing,               {"strategy": "first_choice"}),
             "hill_climbing_stochastic":      (opt.Hill_Climbing,               {"strategy": "stochastic"}),
             "hill_climbing_random_restart":  (opt.Random_Restart_Hill_Climbing, {}),
             "simulated_annealing":           (opt.Simulated_Annealing,         {}),
