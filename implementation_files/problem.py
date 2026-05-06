@@ -378,7 +378,7 @@ class Constraints:
         return gaps * weight
 
     def AVOID_THURSDAY_AFTERNOON(self, schedule, weight):
-        slots = [] # 3 sessions of thursday afternoon
+        slots = [0, 0, 0] # 3 sessions of thursday afternoon
         for i in range(3):
             slots[i] = 1 if any(slots == 27 + i for room, slot in schedule) else 0
         return (slots[0] + 2*slots[1] + 3*slots[2]) * weight
