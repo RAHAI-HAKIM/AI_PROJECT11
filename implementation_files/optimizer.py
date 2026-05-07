@@ -21,6 +21,7 @@ class Optimizer:
 
         for t in range(max_iterations):
             # default behavior is Linear to avoid infinit loop
+            
             if strategy == "Exponential":
                 T *= cooling_rate
             else:
@@ -32,6 +33,7 @@ class Optimizer:
 
             next_state = problem.move_operator(current_state)
             next_state_eval = eval_func(next_state)
+
 
             Delta_E = next_state_eval - current_state_eval
 
@@ -50,6 +52,7 @@ class Optimizer:
                 best_state_so_far = current_state
                 best_state_eval = current_state_eval
 
+
         return best_state_so_far, best_state_eval
 
     def Hill_Climbing(self, problem, objective=None, strategy="steepest"):
@@ -61,13 +64,18 @@ class Optimizer:
             'stochastic'  — picks a random improving neighbor.
         """
         import random
+        
         eval_func     = objective if objective else problem.evaluate
+        
         current_state = dict(problem.state)
         current_eval  = eval_func(current_state)
 
         while True:
             event_id  = random.choice(list(current_state.keys()))
+
             neighbors = list(problem.generate_neighbors(current_state, event_id, size=20))
+            
+    
             if not neighbors:
                 break
 
@@ -114,7 +122,7 @@ class Optimizer:
             for idx, event_id in enumerate(problem.events_by_id.keys()):
                 slot_idx = nump.random.choice(num_slots, p=density_map[idx])
                 current_state[event_id] = problem.slots[slot_idx]
-            result_state = self.Hill_Climbing(problem, strategy=base_strategy)
+            result_state = self.Hill_Climbing(Optimizer,problem, objective=objective,strategy=base_strategy)
             result_eval = eval_func(result_state)
             if result_eval < global_best_eval:
                 global_best_state = result_state
@@ -137,13 +145,14 @@ class Optimizer:
         global_best_val = float("inf")
     
         for restart in range(restarts):
+            print(f"restrat number {restart}")
             state    = dict(problem.state) if restart == 0 else dict(problem.generate_random_state())
             best     = dict(state)
             best_val = eval_func(state)
-    
+
             tabu_queue = deque()
             tabu_set   = set()
-    
+
             for _ in range(iters):
                 best_candidate     = None
                 best_candidate_val = float("inf")
@@ -152,7 +161,9 @@ class Optimizer:
                 event_id = random.choice(valid_events)
             
                 neighbors = problem.generate_neighbors(state, event_id, size=20)
-    
+                    
+                print(f"neighbors are {neighbors}")
+
                 for st in neighbors:
                     t = tuple(sorted(st.items()))
                     if t not in tabu_set:
@@ -175,10 +186,10 @@ class Optimizer:
                 if best_candidate_val < best_val:
                     best     = dict(state) 
                     best_val = best_candidate_val
-    
+
             if best_val < global_best_val:
                 global_best     = dict(best)
                 global_best_val = best_val
-    
-        return global_best, global_best_val 
+
+        return global_best, global_best_val
 
