@@ -1,48 +1,54 @@
-# AI_PROJECT11
-Project Statement:
-Project 11: University Course-to-Room Allocator
+# 🏫 SmartRoom: University Space Optimizer
 
-Aim: Distinct from Exam Scheduling, this project focuses on the semester-long assignment of lectures to
-physical classrooms. The goal is to optimize space usage and minimize campus travel for students/faculty
-using Local Search.
-a. Data Collection & Research:
-• Dataset Overview:
-o Bonus (Local Data): Get the Room Inventory (Floor plans, capacity, type: Lab/Lecture)
-and Course Offerings (Expected attendance) from the ENSIA administration.
-o Standard (International): Use the ITC2007 (International Timetabling Competition)
-dataset track for "Curriculum-based Course Timetabling."
+> **Solving the "Musical Chairs" problem for campus classrooms.**
 
-• External Resources:
-o Research Simulated Annealing and Tabu Search for resource allocation.
-o Study "Room Stability" (keeping a course in the same room all semester).
+## 🎯 What is this?
 
-b. Problem Definition:
-Assign a (Room, TimeSlot) tuple to every Course Event for the entire semester.
+Every semester, universities struggle to fit hundreds of classes into a limited number of rooms. **SmartRoom** is an AI-powered tool that automatically builds the perfect schedule. It ensures that every student has a seat, every lab has the right equipment, and professors don't have to hike across campus between lectures.
 
-c. Constraints & Objective Function:
-• Constraints:
-o Hard: Room Capacity ≥ Course Enrollment. Room Type match (Electronics in Lab). No
-double-booking of rooms.
-o Soft: Professor Preference (consecutive classes in same room), etc.
-• Objective Function:
-o Minimize Penalty: The penalty will take into account the
-Distance, CapacityWaste, and RoomChange.
+---
 
-d. Search Strategy Implementation:
-• Simulated Annealing (SA):
-o Start with a random valid allocation.
-o Move Operator: Select a course at random and move it to a different valid room.
-o Temperature: Start high (allow bad moves) and cool down (strict optimization).
-• Hill Climbing with Random Restart:
-o Run Hill Climbing 50 times from different random starting points and pick the best result.
-• Constraint Satisfaction (CSP):
-o Use CSP only to generate the initial valid solution (finding a feasible start point), then use
-SA to optimize it.
-e. Comparative Evaluation:
-• Performance Comparison:
-o Compare Hill Climbing vs. Simulated Annealing.
-o Show a graph of "Cost vs. Iterations."
-• Success Criteria:
-o Zero Hard Constraint violations.
-o Demonstrable reduction in "wasted seats" compared to the current manual schedule used
-by the department.
+## 🧩 How it Solves the Puzzle
+
+### 1. The Rules (Hard Constraints)
+
+The app treats these as "deal-breakers." A schedule isn't finished until:
+
+* 🪑 **No Crowding:** You can't put 50 students in a room with 30 chairs.
+* 🧪 **Right Lab:** You can't teach Chemistry in a History hall.
+* 🗓️ **No Double-Booking:** Two classes can't exist in the same room at the same time.
+
+### 2. The Comforts (Soft Constraints)
+
+Once the rules are met, the AI tries to make life better for everyone:
+
+* 🚶 **Short Walks:** Keeps classes for the same group of students close together.
+* 📍 **Consistency:** Tries to keep a specific course in the same room all semester.
+* 📉 **No Waste:** Avoids putting a small 10-person seminar in a 300-seat auditorium.
+
+---
+
+## 🧠 The "Brain" (Our Strategy)
+
+We use three different AI "styles" to find the best room layout:
+
+* **The Explorer (Simulated Annealing):** Starts by trying random ideas, then slowly narrows down to the most efficient one.
+* **The Grinder (Hill Climbing):** Makes small, constant improvements until it can’t find any more ways to get better.
+* **The Memory Expert (Tabu Search):** Remembers where it has already looked so it doesn't waste time repeating the same mistakes.
+
+---
+
+## 📈 Success Goals
+
+We aren't just making a schedule; we’re making it **better** than a human can.
+
+1. **Zero Conflicts:** No more "Who is supposed to be in this room?" arguments.
+2. **Less Walking:** Students spend more time learning and less time sprinting across campus.
+3. **Space Efficiency:** Maximizing the use of every single room on campus.
+
+---
+
+## 📂 Data Sources
+
+* **Real Data:** Floor plans and class lists from the **ENSIA** administration.
+* **Global Benchmark:** Tested against the **ITC2007** (International Timetabling Competition) standard.
