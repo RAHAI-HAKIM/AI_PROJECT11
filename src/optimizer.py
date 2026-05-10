@@ -39,6 +39,7 @@ class Optimizer:
 
             # we flip the logic here since we want to minimize the evaluation function
             if Delta_E < 0:
+
                 current_state = next_state
                 current_state_eval = next_state_eval
             else:
@@ -122,7 +123,7 @@ class Optimizer:
             for idx, event_id in enumerate(problem.events_by_id.keys()):
                 slot_idx = nump.random.choice(num_slots, p=density_map[idx])
                 current_state[event_id] = problem.slots[slot_idx]
-            result_state = self.Hill_Climbing(Optimizer,problem, objective=objective,strategy=base_strategy)
+            result_state, _  = self.Hill_Climbing(Optimizer,problem, objective=objective,strategy=base_strategy)
             result_eval = eval_func(result_state)
             if result_eval < global_best_eval:
                 global_best_state = result_state
@@ -132,7 +133,7 @@ class Optimizer:
                     slot_idx = problem.slots.index(assigned_pos)
                     density_map[idx][slot_idx] += 0.1 
                     density_map[idx] /= density_map[idx].sum()
-        return global_best_state
+        return global_best_state, global_best_eval
         
     def Tabu_Search(self, problem, objective=None, restarts=5, iters=300, tabu_size=20):
         """
@@ -145,7 +146,6 @@ class Optimizer:
         global_best_val = float("inf")
     
         for restart in range(restarts):
-            print(f"restrat number {restart}")
             state    = dict(problem.state) if restart == 0 else dict(problem.generate_random_state())
             best     = dict(state)
             best_val = eval_func(state)
@@ -162,8 +162,6 @@ class Optimizer:
             
                 neighbors = problem.generate_neighbors(state, event_id, size=20)
                     
-                print(f"neighbors are {neighbors}")
-
                 for st in neighbors:
                     t = tuple(sorted(st.items()))
                     if t not in tabu_set:

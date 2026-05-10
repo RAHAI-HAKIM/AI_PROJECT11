@@ -1,6 +1,5 @@
 from contraints import *
 
-
 # This is the class that implements main problem method, specific data-driven problems will enhirit from it 
 class Problem:
     pass
@@ -39,7 +38,7 @@ class EnsiaProblem(Problem):
 
         # the state of the problem is a dict in the form:
         #  eventid -> (roomid, timeslot(day, slot)) 
-        if cspmethod == "local_search": 
+        if cspmethod == "local_search":
             state = self.generate_random_state() # generate a random assignment that might violate hard constraints
             state = self.enhance(state) # does local search csp to resolve all hard constraints
             self.state = state
@@ -47,8 +46,8 @@ class EnsiaProblem(Problem):
             if cspmethod != "global_search": print("invalid csp method, redirecting to GS csp ...\n")
             self.state = self.generate_valid_state()
         
-
         
+
 
     def load_data(self, filename):
         """
@@ -362,6 +361,7 @@ class EnsiaProblem(Problem):
             RuntimeError: If an event has no compatible rooms or a valid schedule cannot be found.
         """
         # Precompute all compatible rooms for every event based on capacity and type
+        # for each event id , we store the rooms that we are sure that we can book there
         self.event_compatible_rooms = {}
         for event in self.events:
             compat = [
@@ -547,63 +547,153 @@ class EnsiaProblem(Problem):
 
         return result
 
+    # We define the following as a actions to be performed 
+    # by the generator function for next states
+    def swapper_napper(self,state,iteration=10):
+        """
+            given a state , returns a state there the some keys and there values are swapped
+            only used for testing purposes for now.
+        """
+        import random
+        course = list(state.keys())
+
+        for i in range(iteration):
+            selected1 = random.choice(course)
+            selected2 = random.choice(course)
+
+            values1 = state[selected1]
+
+            state[selected1] = state[selected2]
+            state[selected2] = values1
+
+        if not self.is_consistent(state,is_complete=True):
+            return self.swapper_napper(state)
+
+        return state
+
+    def shifter_nifter(self,state,iteration=10,shift_rate=0.75,direction="left",amount=6):
+        """
+            Given a state , returns a state where some of its slots 
+            have beem shifted either right or left acording to some 
+            shift rate set by the caller.
+        """
+
+        if direction not in ["left","right"]:
+            # ignore, maybe the cause of cost no changing ,
+            # poke around this
+            return state
+
+        import random
+        course = list(state.keys())
+
+        # this is a set that contains the "used slots"
+        # its name is missleading ... we just use it to keep track
+        # of the slots we are allowed to change to
+        reverse_mapping = set()
+        for key, value in state.items():
+            reverse_mapping.add(value[1])
+
+        for i in range(iteration):
+            target_event = random.choice(course)
+            # get the slot
+            (room_id,target_slot) = state[target_event]
+            next_slot = target_slot
+
+            if direction == "left":
+                next_slot -= amount
+            else:
+                next_slot += amount
+
+            if next_slot < 0:
+                next_slot = 0
+            else:
+                next_slot %= 6
+
+            if next_slot not in reverse_mapping:
+                state[target_event] = (room_id,next_slot)
+
+        if not self.is_consistent(state):
+            return self.shifter_nifter(state)
+
+        return state
+    
+    def move_to_another_slot(self,state,iteration=10):
+        """
+            Returns another state where some events have there slots changed completly
+        """
+
+        import random
+
+        all_rooms = [key for key,_ in self.rooms_by_id.items()]
+        ## initial population
+        available_slots = dict()
+        for room_id in all_rooms:
+            available_slots[room_id] = set([i for i in range(5*6)])
+
+        # Purge the set of all slots and remove the onces used 
+        # to get the onces avaiblble .... amazing comment
+        for key, value in state.items():
+            (key, slot) = value
+            if slot in available_slots:
+                available_slots[key].remove(slot)
+
+        events = list(state.keys())
+
+        for i in range(iteration):
+            # select to be swapped
+            event = random.choice(events)
+            # get previous data
+            (roomd_id, slot) = state[event]
+            # get next slot
+            next_slot = random.choice(list(available_slots[roomd_id]))
+            # update the state and the available_slots
+            # print("moving rn rn")
+            state[event] = (roomd_id, next_slot)
+
+            available_slots[roomd_id].remove(next_slot)
+            available_slots[roomd_id].add(slot)
+
+        if not self.is_consistent(state):
+            return self.move_to_another_slot(state)
+
+        return state
+
+
+    def pipeline_generate_neighbors(self, state, size=50):
+        """
+            This function will return a list of next neighbors that will be passed 
+            by reference through a pipeline of changes ... (basically is a generate_neighbors)
+
+            WARNING: this function assumes the state given is a valid state , therefore it wont work as 
+            expected in case of solving a CSP using local search
+        """
+        import copy
+        neighbors = []
+
+        for _ in range(size):
+            n = copy.deepcopy(state)
+
+            n = self.move_to_another_slot(n, iteration=10)
+            n = self.swapper_napper(n, iteration=5)
+            n = self.shifter_nifter(n, iteration=10, shift_rate=0.5, direction="left", amount=4)
+            n = self.shifter_nifter(n, iteration=10, shift_rate=0.5, direction="right", amount=4)
+
+            neighbors.append(n)
+
+        return neighbors
 
     def generate_neighbors(self, state, event_id, size=50, shuffle=False):
-        import random
-
-        returned_neighbors = []
-
-        # returns at most size states by assigning possible slots to a state
-        if shuffle:
-            random.shuffle(self.slots)
-
-        original_slot = state[event_id]
-
-        for slot in self.slots:
-            state[event_id] = slot
-            for hc in self.hard_constraints_list:
-                if isinstance(hc, str): 
-                    continue
-
-                rule_function = getattr(self.constraint_obj, hc["rule"]) 
-                # check if violated , break and try another slot
-                if rule_function(state):
-                    break
-                else:
-                    # if no hard constraint is violated, i.e. for loop terminated without breaking
-                    returned_neighbors.append(state)
-                    yield state
-                    size -= 1
-                    if size <= 0:
-                        break
-
-        # last part on how this function is used and what is expected
-        state[event_id] = original_slot
-
-        return returned_neighbors
+        """
+            Uses the pipeline generator to generate n neighbors
+        """
+        return self.pipeline_generate_neighbors(state,size=size)
 
     def move_operator(self, state, shuffle=False):
-        import random
+        """
+            Uses the pipeline to generate a single neighbor
+        """
+        return self.pipeline_generate_neighbors(state,size=1)[0]
 
-        attempted = set()
-        valid_events = list(state.keys())
-
-        while len(attempted) < len(valid_events):
-            event_id = random.choice(valid_events)
-            while event_id in attempted:
-                event_id = random.choice(valid_events)
-            
-            old_slot = state[event_id]
-            state[event_id] = None
-            
-            for neighbor in self.generate_neighbors(state, event_id, size=2, shuffle=shuffle):
-                state[event_id] = old_slot
-                return neighbor
-            
-            state[event_id] = old_slot
-            attempted.add(event_id)
-            
-        return state
     
     def evaluate(self, state):
         groups_cost = 0.0
@@ -677,5 +767,9 @@ class EnsiaProblem(Problem):
             if isinstance(hc, str): continue
             fn   = getattr(c, hc["rule"])
             args = category_args[hc["category"]]
-            violations += fn(*args, count=True)
+            if fn(*args, count=True) > 0:
+                violations += 1
+
         return violations
+
+
