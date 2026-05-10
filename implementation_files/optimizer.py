@@ -50,7 +50,7 @@ class Optimizer:
         return best_state_so_far
 
     def Hill_Climbing(self, problem, strategy="steepest"):
-current_state = dict(problem.state)
+        current_state = dict(problem.state)
         current_eval = problem.evaluate(current_state)
 
         while True:
