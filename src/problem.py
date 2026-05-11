@@ -20,40 +20,36 @@ class EnsiaProblem(Problem):
         # load data elements
         data = self.load_data(dataset)
         self.rooms = data[0]
-        self.events = data[3]
+        self.sections = data[1]
         self.groups = data[2]
+        self.events = data[3]
+
         # a table that stores the assignment of groups to section section_id => [group_id, group_id, ..]
-        self.section_to_group = {section["id"]: [] for section in data[1]}
+        self.section_to_group = {section["id"]: [] for section in self.sections}
         for group in self.groups:
             self.section_to_group[group["section_id"]].append(group["id"])
+
         # access data elements by their id
         self.events_by_id = {e["id"]: e for e in self.events}
         self.rooms_by_id = {r["id"]: r for r in self.rooms}
-        self.groups_by_id = {r["id"]: r for r in self.groups}
+        self.groups_by_id = {g["id"]: g for g in self.groups}
 
         # fill the (room, time) tuple, assuming time is a number from 0-29
-        slots = []
-        for r in self.rooms:
-            for t in range(30):
-                slots.append((r["id"], t))
-        self.slots = slots
+        self.slots = [(r["id"], t) for r in self.rooms for t in range(30)]
 
         # get constraint list -not handled yet-
-        self.hard_constraints_list = data[4].get("hard", [])
-        self.soft_constraints_list = data[4].get("soft", [])
+        self.constraint_list = data[4]
+        self.hard_constraints_list = self.constraint_list.get("hard", [])
+        self.soft_constraints_list = self.constraint_list.get("soft", [])
 
         # constraint object to hold the methods
         self.constraint_obj = Constraints(self)
 
         # the state of the problem is a dict in the form:
-        #  eventid -> (roomid, timeslot(day, slot))
+        # eventid -> (roomid, timeslot(day, slot))
         if cspmethod == "local_search":
-            state = (
-                self.generate_random_state()
-            )  # generate a random assignment that might violate hard constraints
-            state = self.enhance(
-                state
-            )  # does local search csp to resolve all hard constraints
+            state = self.generate_random_state() # generate a random assignment that might violate hard constraints
+            state = self.enhance(state) # does local search csp to resolve all hard constraints
             self.state = state
         else:
             if cspmethod != "global_search":
