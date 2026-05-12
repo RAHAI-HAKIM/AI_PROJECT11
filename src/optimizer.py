@@ -9,10 +9,10 @@ class Optimizer:
     def Simulated_Annealing(
         self,
         problem,
-        objective,
-        initial_temp,
-        cooling_rate,
-        max_iterations,
+        objective=None,
+        initial_temp=100,
+        cooling_rate=1,
+        max_iterations=100,
         strategy="Linear",
     ):
         """
@@ -75,11 +75,7 @@ class Optimizer:
         current_eval = eval_func(current_state)
 
         while True:
-            event_id = random.choice(list(current_state.keys()))
-
-            neighbors = list(
-                problem.generate_neighbors(current_state, event_id, size=20)
-            )
+            neighbors = problem.generate_neighbors(current_state, size=20)
 
             if not neighbors:
                 break
@@ -169,10 +165,7 @@ class Optimizer:
                 best_candidate = None
                 best_candidate_val = float("inf")
 
-                valid_events = list(state.keys())
-                event_id = random.choice(valid_events)
-
-                neighbors = problem.generate_neighbors(state, event_id, size=20)
+                neighbors = problem.generate_neighbors(state, size=20)
 
                 for st in neighbors:
                     t = tuple(sorted(st.items()))

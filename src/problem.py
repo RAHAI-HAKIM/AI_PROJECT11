@@ -1,7 +1,7 @@
 from collections import defaultdict
 from constraints import Constraints
 from optimizer import Optimizer
-import copy
+from copy import deepcopy
 import json
 import os
 import random
@@ -682,7 +682,7 @@ class EnsiaProblem(Problem):
         neighbors = []
 
         for _ in range(size):
-            n = copy.deepcopy(state)
+            n = deepcopy(state)
 
             n = self.move_to_another_slot(n, iteration=10)
             n = self.swapper_napper(n, iteration=5)
@@ -696,18 +696,57 @@ class EnsiaProblem(Problem):
             neighbors.append(n)
 
         return neighbors
+    
+    
+    def _relocate(self, state, n, keep_consistent=True):
+        """
+        Relocates n events to different slots
+        Args:
+            state: The current state
+            n: The number of events to relocate
+            keep_consistent: Whether to keep the state consistent
+        Returns:
+            dict: The updated state
+        """
+        
+        if keep_consistent and not self.is_consistent(state):
+            raise ValueError("State is not consistent")
+        
+        event_sample = random.sample(list(state.keys()), k=n)
+        used_slots = set(state.values())
+        empty_slots = [s for s in self.slots if s not in used_slots]
+        state_copy = deepcopy(state)
+        
+        for event in event_sample:
+            old_slot = state_copy[event]
+            if keep_consistent:
+                random.shuffle(empty_slots)
+                for slot in empty_slots:
+                    state_copy[event] = slot
+                    if self.is_consistent(state_copy):
+                        break
+            else:
+                state_copy[event] = random.choice(empty_slots)
+            empty_slots.append(old_slot)
+            empty_slots.remove(state_copy[event])
+        
+        return state_copy
 
-    def generate_neighbors(self, state, event_id, size=50, shuffle=False):
+    def generate_neighbors(self, state, size, n=5, keep_consistent=True):
         """
-        Uses the pipeline generator to generate n neighbors
+        Return a list of size neighbors, each with n events relocated
         """
-        return self.pipeline_generate_neighbors(state, size=size)
+        neighbors = []
+        for _ in range(size):
+            neighbors.append(self._relocate(state, n, keep_consistent))
+        return neighbors
+        # return self.pipeline_generate_neighbors(state, size=size)
 
-    def move_operator(self, state, shuffle=False):
+    def move_operator(self, state, n=5, keep_consistent=True):
         """
-        Uses the pipeline to generate a single neighbor
+        Return one neighbor with n events relocated
         """
-        return self.pipeline_generate_neighbors(state, size=1)[0]
+        return self.generate_neighbors(state, size=1, n=n, keep_consistent=keep_consistent)[0]
 
     def evaluate(self, state):
         groups_cost = 0.0
