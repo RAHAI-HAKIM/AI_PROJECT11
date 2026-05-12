@@ -48,6 +48,7 @@ class EnsiaProblem(Problem):
         # the state of the problem is a dict in the form:
         # eventid -> (roomid, timeslot(day, slot))
         if cspmethod == "local_search":
+            self._csp_local_search = True # for generate_neighbors to make it not care about the consistency of the neighbors
             state = self.generate_random_state() # generate a random assignment that might violate hard constraints
             state = self.enhance(state) # does local search csp to resolve all hard constraints
             self.state = state
@@ -55,6 +56,8 @@ class EnsiaProblem(Problem):
             if cspmethod != "global_search":
                 print("invalid csp method, redirecting to GS csp ...\n")
             self.state = self.generate_valid_state()
+        
+        self._csp_local_search = False
 
     def load_data(self, filename):
         """
@@ -698,17 +701,17 @@ class EnsiaProblem(Problem):
         return neighbors
     
     
-    def _relocate(self, state, n, keep_consistent=True):
+    def _relocate(self, state, n):
         """
         Relocates n events to different slots
         Args:
             state: The current state
             n: The number of events to relocate
-            keep_consistent: Whether to keep the state consistent
         Returns:
             dict: The updated state
         """
         
+        keep_consistent = not self._csp_local_search
         if keep_consistent and not self.is_consistent(state):
             raise ValueError("State is not consistent")
         
@@ -732,21 +735,21 @@ class EnsiaProblem(Problem):
         
         return state_copy
 
-    def generate_neighbors(self, state, size, n=5, keep_consistent=True):
+    def generate_neighbors(self, state, size, n=5):
         """
         Return a list of size neighbors, each with n events relocated
         """
         neighbors = []
         for _ in range(size):
-            neighbors.append(self._relocate(state, n, keep_consistent))
+            neighbors.append(self._relocate(state, n))
         return neighbors
         # return self.pipeline_generate_neighbors(state, size=size)
 
-    def move_operator(self, state, n=5, keep_consistent=True):
+    def move_operator(self, state, n=5):
         """
         Return one neighbor with n events relocated
         """
-        return self.generate_neighbors(state, size=1, n=n, keep_consistent=keep_consistent)[0]
+        return self.generate_neighbors(state, 1, n)[0]
 
     def evaluate(self, state):
         groups_cost = 0.0

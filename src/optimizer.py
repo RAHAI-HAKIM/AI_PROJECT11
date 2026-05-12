@@ -30,7 +30,8 @@ class Optimizer:
 
         for t in range(max_iterations):
             # default behavior is Linear to avoid infinit loop
-
+            print(f"Iteration {t}: Temperature = {T}, Evaluation = {current_state_eval}")
+            
             if strategy == "Exponential":
                 T *= cooling_rate
             else:
@@ -150,6 +151,8 @@ class Optimizer:
         global_best_val = float("inf")
 
         for restart in range(restarts):
+            print(f"Restart {restart + 1}")
+            
             state = (
                 dict(problem.state)
                 if restart == 0
@@ -161,7 +164,9 @@ class Optimizer:
             tabu_queue = deque()
             tabu_set = set()
 
-            for _ in range(iters):
+            for i in range(iters):
+                print(f"Restart {restart + 1} Iteration { i + 1 }")
+                
                 best_candidate = None
                 best_candidate_val = float("inf")
 
