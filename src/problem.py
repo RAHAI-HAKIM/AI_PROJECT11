@@ -785,5 +785,5 @@ class EnsiaProblem(Problem):
         if isinstance(hc, str): continue
         fn   = getattr(c, hc["rule"])
         args = category_args[hc["category"]]
-        violations += fn(*args, count=True)  # here were we fixed
+        violations += fn(*args, count=True)  # here were we fixed and the explanation is gonna be in report 
     return violations
