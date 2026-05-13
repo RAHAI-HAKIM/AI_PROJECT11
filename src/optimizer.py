@@ -97,29 +97,17 @@ class Optimizer:
         First restart starts from problem.state, subsequent ones use a density-guided random state
         that is biased toward slots that performed well in previous restarts.
         """
-        eval_func = objective if objective else problem.evaluate
         global_best_state = None
         global_best_eval = float('inf')
-        num_events = len(problem.events)
-        num_slots = len(problem.slots)
-        density_map = nump.full((num_events, num_slots), 1.0 / num_slots)
         for every in range(num_restarts):
-            current_state = {}
-            for idx, event_id in enumerate(problem.events_by_id.keys()):
-                slot_idx = nump.random.choice(num_slots, p=density_map[idx])
-                current_state[event_id] = problem.slots[slot_idx]
-            result_state, _  = self.Hill_Climbing(Optimizer,problem, objective=objective,strategy=base_strategy)
-            result_eval = eval_func(result_state)
+            problem.state = problem.generate_random_state()
+            problem.state = problem.enhance(problem.state)
+            result_state, result_eval = self.Hill_Climbing_Standard(problem, strategy=base_strategy)
             if result_eval < global_best_eval:
                 global_best_state = result_state
                 global_best_eval = result_eval
-                for idx, event_id in enumerate(problem.events_by_id.keys()):
-                    assigned_pos = result_state[event_id]
-                    slot_idx = problem.slots.index(assigned_pos)
-                    density_map[idx][slot_idx] += 0.1 
-                    density_map[idx] /= density_map[idx].sum()
         return global_best_state, global_best_eval
-        
+    
     def Tabu_Search(self, problem, objective=None, restarts=5, iters=300, tabu_size=20):
         """
         Explores neighbors while maintaining a tabu list to avoid revisiting recent states.
