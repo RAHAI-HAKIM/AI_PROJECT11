@@ -750,26 +750,20 @@ class EnsiaProblem(Problem):
         return 0.6 * groups_cost + 0.4 * profs_cost + add_cost
 
     def evaluate_csp(self, state):
-        slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = \
-            self.constraint_obj._build_lookup_tables(state)
-        c = self.constraint_obj
-
-        category_args = {
-            "slot_to_rooms":    (slot_to_rooms,),
-            "slot_to_groups":   (slot_to_groups,),
-            "slot_to_teachers": (slot_to_teachers,),
-            "state_based":      (state,),
-            "teacher_based":    (teacher_events,),
-        }
-
-        violations = 0
-        for hc in self.hard_constraints_list:
-            if isinstance(hc, str): continue
-            fn   = getattr(c, hc["rule"])
-            args = category_args[hc["category"]]
-            if fn(*args, count=True) > 0:
-                violations += 1
-
-        return violations
-
-
+    slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = \
+        self.constraint_obj._build_lookup_tables(state)
+    c = self.constraint_obj
+    category_args = {
+        "slot_to_rooms":    (slot_to_rooms,),
+        "slot_to_groups":   (slot_to_groups,),
+        "slot_to_teachers": (slot_to_teachers,),
+        "state_based":      (state,),
+        "teacher_based":    (teacher_events,),
+    }
+    violations = 0
+    for hc in self.hard_constraints_list:
+        if isinstance(hc, str): continue
+        fn   = getattr(c, hc["rule"])
+        args = category_args[hc["category"]]
+        violations += fn(*args, count=True)  # here were we fixed
+    return violations
