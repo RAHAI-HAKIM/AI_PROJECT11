@@ -494,7 +494,7 @@ class EnsiaProblem(Problem):
         shuffled_slots = random.sample(self.slots, len(self.events))
         return {event["id"]: slot for event, slot in zip(self.events, shuffled_slots)}
 
-    def enhance(self, state, method="hill_climbing_steepest", objective=None):
+    def enhance(self, state, method="hill_climbing_steepest"):
         """
         Applies a local search algorithm to iteratively improve a schedule 
         by resolving hard constraint violations. Includes random restarts to escape local optima.
@@ -511,18 +511,12 @@ class EnsiaProblem(Problem):
         """
         from optimizer import Optimizer
         opt = Optimizer()
-    
-        if objective is None:
-            objective = self.evaluate_csp
-    
-        # use CSP-safe neighbors when solving hard constraints
-        if objective == self.evaluate_csp:
-            self.generate_neighbors = lambda state, event_id=None, size=50, shuffle=False: self.generate_neighbors_csp(state, size)
-            self.move_operator      = lambda state, shuffle=False: self.move_operator_csp(state)
-    
+
+        objective = self.evaluate_csp
+
         MAX_RESTARTS = 20
         current = dict(state)
-    
+
         method_map = {
             "hill_climbing_steepest":        (opt.Hill_Climbing,                {"strategy": "steepest"}),
             "hill_climbing_first":           (opt.Hill_Climbing,                {"strategy": "first_choice"}),
@@ -533,24 +527,24 @@ class EnsiaProblem(Problem):
         }
         if method not in method_map:
             raise ValueError(f"Unknown method '{method}'. Choose from {list(method_map)}")
-    
+
         search_fn, kwargs = method_map[method]
-    
-        for _ in range(MAX_RESTARTS):
+
+        for i in range(MAX_RESTARTS):
             self.state = current
+            print(f"before cost {self.evaluate_csp(self.state)}")
             result, cost = search_fn(problem=self, objective=objective, **kwargs)
-    
+            print(f"afte cost {cost}")
+
+            print(f"int restrat number {i}")
+
             if cost == 0:
                 return result
-    
-            import random
-            kicked = dict(result)
-            for _ in range(5):
-                eid = random.choice(list(kicked.keys()))
-                kicked[eid] = random.choice(self.slots)
-            current = kicked
-    
-        return result    # We define the following as a actions to be performed 
+
+            current = self.generate_random_state()
+
+        return 
+
     # by the generator function for next states
     def swapper_napper(self,state,iteration=10):
         """
@@ -685,13 +679,13 @@ class EnsiaProblem(Problem):
 
         return neighbors
 
-    def generate_neighbors(self, state, size=50, shuffle=False):
+    def generate_neighbors(self, state, size=50):
         """
             Uses the pipeline generator to generate n neighbors
         """
         return self.pipeline_generate_neighbors(state,size=size)
 
-    def move_operator(self, state, shuffle=False):
+    def move_operator(self, state):
         """
             Uses the pipeline to generate a single neighbor
         """
@@ -704,10 +698,12 @@ class EnsiaProblem(Problem):
         event_ids = list(state.keys())
         for _ in range(size):
             n = copy.deepcopy(state)
-            eid = random.choice(event_ids)
-            n[eid] = random.choice(self.slots)
+            for i in range(10):
+                eid = random.choice(event_ids)
+                n[eid] = random.choice(self.slots)
             neighbors.append(n)
         return neighbors
+    
     def move_operator_csp(self, state):
         import random
         import copy
@@ -715,6 +711,7 @@ class EnsiaProblem(Problem):
         eid = random.choice(list(state.keys()))
         n[eid] = random.choice(self.slots)
         return n
+
     def evaluate(self, state):
         groups_cost = 0.0
         profs_cost  = 0.0

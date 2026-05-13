@@ -14,7 +14,7 @@ prob = EnsiaProblem("dataset/data_s2.json")
 algorithms = {
     "Hill Climbing": (Optimizer.Hill_Climbing, {"strategy": "steepest"}),
     "Simulated Annealing": (Optimizer.Simulated_Annealing, {
-        "initial_temp": 100, "cooling_rate": 0.9, "max_iterations": 100, "strategy": "Exponential"
+        "initial_temp": 1000, "cooling_rate": 0.95, "max_iterations": 1000, "strategy": "Exponential"
     }),
     "Random Restart HC": (Optimizer.Random_Restart_Hill_Climbing, {
         "base_strategy": "steepest", "num_restarts": 10
@@ -36,7 +36,7 @@ for name, (func, kwargs) in algorithms.items():
     
     # Execute the algorithm
     # Note: Using *args/**kwargs style if your Optimizer methods allow it
-    next_state, _ = func(Optimizer, test_prob, objective=test_prob.evaluate, **kwargs)
+    next_state, _ = func(Optimizer, test_prob, objective="opt", **kwargs)
     
     final_eval = test_prob.evaluate(next_state)
     improvement = initial_eval - final_eval # Assuming lower is better

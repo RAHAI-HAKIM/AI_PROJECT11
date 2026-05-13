@@ -9,7 +9,8 @@ class Optimizer:
         """
         gets the problem's current state and returns an optimized one using SA
         """
-        eval_func = objective if objective is not None else problem.evaluate
+        eval_func = problem.evaluate if objective == "opt" else problem.evaluate_csp
+        get_next = problem.move_operator if objective == "opt" else problem.move_operator_csp
 
         current_state      = dict(problem.state)
         current_state_eval = eval_func(current_state)
@@ -31,7 +32,7 @@ class Optimizer:
             if T <= 1e-10:
                 break
 
-            next_state = problem.move_operator(current_state)
+            next_state = get_next(current_state)
             next_state_eval = eval_func(next_state)
 
 
@@ -56,7 +57,7 @@ class Optimizer:
 
         return best_state_so_far, best_state_eval
 
-    def Hill_Climbing(self, problem, objective=None, strategy="steepest"):
+    def Hill_Climbing(self, problem, objective="opt", strategy="steepest"):
         """
         Iteratively moves to a better neighbor until no improvement is found.
         strategy:
@@ -66,14 +67,15 @@ class Optimizer:
         """
         import random
         
-        eval_func     = objective if objective else problem.evaluate
-        
+        eval_func = problem.evaluate if objective == "opt" else problem.evaluate_csp
+        get_neighbors = problem.generate_neighbors if objective == "opt" else problem.generate_neighbors_csp
+
         current_state = dict(problem.state)
         current_eval  = eval_func(current_state)
 
         while True:
-            neighbors = list(problem.generate_neighbors(current_state, size=20))
-            
+            neighbors = list(get_neighbors(current_state, size=20))
+
     
             if not neighbors:
                 break
@@ -104,7 +106,7 @@ class Optimizer:
 
         return current_state, current_eval
 
-    def Random_Restart_Hill_Climbing(self, problem,objective=None, base_strategy="steepest", num_restarts=50):
+    def Random_Restart_Hill_Climbing(self, problem,objective="opt", base_strategy="steepest", num_restarts=50):
         """
         Runs Hill_Climbing multiple times from different starting points to escape local optima.
         First restart starts from problem.state, subsequent ones use a density-guided random state
@@ -127,7 +129,9 @@ class Optimizer:
         First restart starts from problem.state, subsequent ones use generate_random_state().
         tabu_size controls how many recent states are blacklisted at any time.
         """
-        eval_func       = objective if objective else problem.evaluate
+        eval_func = problem.evaluate if objective == "opt" else problem.evaluate_csp
+        get_neighbors = problem.generate_neighbors if objective == "opt" else problem.generate_neighbors_csp
+
         global_best     = None
         global_best_val = float("inf")
     
@@ -145,7 +149,7 @@ class Optimizer:
 
                 valid_events = list(state.keys())
                 # removed event_id getting ... risk of logic for algorithm
-                neighbors = problem.generate_neighbors(state,size=20)
+                neighbors = get_neighbors(state,size=20)
                     
                 for st in neighbors:
                     t = tuple(sorted(st.items()))
