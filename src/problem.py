@@ -509,6 +509,7 @@ class EnsiaProblem(Problem):
         Raises:
             ValueError: If an unknown search method is provided.
         """
+        # here we optimize the constraint
         from optimizer import Optimizer
         opt = Optimizer()
     
@@ -520,7 +521,7 @@ class EnsiaProblem(Problem):
             self.generate_neighbors = lambda state, event_id=None, size=50, shuffle=False: self.generate_neighbors_csp(state, size)
             self.move_operator      = lambda state, shuffle=False: self.move_operator_csp(state)
     
-        MAX_RESTARTS = 20
+        MAX_RESTARTS = 50
         current = dict(state)
     
         method_map = {
@@ -550,7 +551,8 @@ class EnsiaProblem(Problem):
                 kicked[eid] = random.choice(self.slots)
             current = kicked
     
-        return result    # We define the following as a actions to be performed 
+        return result 
+    # We define the following as a actions to be performed 
     # by the generator function for next states
     def swapper_napper(self,state,iteration=10):
         """
@@ -574,6 +576,28 @@ class EnsiaProblem(Problem):
 
         return state
 
+    def _get_violating_events(self, state):
+        from collections import defaultdict
+        slot_to_rooms    = defaultdict(list)
+        slot_to_teachers = defaultdict(list)
+        slot_to_groups   = defaultdict(list)
+        for event_id, (roomid, slot) in state.items():
+            event = self.events_by_id[event_id]
+            slot_to_rooms[(roomid, slot)].append(event_id)
+            slot_to_teachers[(event["teacher_id"], slot)].append(event_id)
+            if event["type_id"] == 1:
+                for gid in self.section_to_group[event["target_id"]]:
+                    slot_to_groups[(gid, slot)].append(event_id)
+            else:
+                slot_to_groups[(event["target_id"], slot)].append(event_id)
+        violating = set()
+        for eids in slot_to_rooms.values():
+            if len(eids) > 1: violating.update(eids)
+        for eids in slot_to_teachers.values():
+            if len(eids) > 1: violating.update(eids)
+        for eids in slot_to_groups.values():
+            if len(eids) > 1: violating.update(eids)
+        return list(violating) if violating else list(state.keys())
     def shifter_nifter(self,state,iteration=10,shift_rate=0.75,direction="left",amount=6):
         """
             Given a state , returns a state where some of its slots 
@@ -701,19 +725,36 @@ class EnsiaProblem(Problem):
         import random
         import copy
         neighbors = []
-        event_ids = list(state.keys())
+        violating = self._get_violating_events(state)
         for _ in range(size):
             n = copy.deepcopy(state)
-            eid = random.choice(event_ids)
-            n[eid] = random.choice(self.slots)
+            eid = random.choice(violating)
+            event = self.events_by_id[eid]
+            compat_rooms = [
+                r["id"] for r in self.rooms
+                if r["capacity"] >= event["headcount"]
+                and r["room_type_id"] == event["required_room_type_id"]
+            ]
+            room = random.choice(compat_rooms) if compat_rooms else random.choice([r["id"] for r in self.rooms])
+            slot = random.randint(0, 29)
+            n[eid] = (room, slot)
             neighbors.append(n)
-        return neighbors
+        return neighbors;    
     def move_operator_csp(self, state):
         import random
         import copy
         n = copy.deepcopy(state)
-        eid = random.choice(list(state.keys()))
-        n[eid] = random.choice(self.slots)
+        violating = self._get_violating_events(state)
+        eid = random.choice(violating)
+        event = self.events_by_id[eid]
+        compat_rooms = [
+            r["id"] for r in self.rooms
+            if r["capacity"] >= event["headcount"]
+            and r["room_type_id"] == event["required_room_type_id"]
+        ]
+        room = random.choice(compat_rooms) if compat_rooms else random.choice([r["id"] for r in self.rooms])
+        slot = random.randint(0, 29)
+        n[eid] = (room, slot)
         return n
     def evaluate(self, state):
         groups_cost = 0.0

@@ -57,57 +57,44 @@ class Optimizer:
         return best_state_so_far, best_state_eval
 
     def Hill_Climbing(self, problem, objective=None, strategy="steepest"):
-        """
-        Iteratively moves to a better neighbor until no improvement is found.
-        strategy:
-            'steepest'    — picks the best neighbor overall.
-            'first_choice'— picks the first improving neighbor.
-            'stochastic'  — picks a random improving neighbor.
-        """
+        eval_func = objective if objective is not None else problem.evaluate
         current_state = dict(problem.state)
-        current_eval = problem.evaluate(current_state)
+        current_eval = eval_func(current_state)
 
         while True:
             neighbors = problem.generate_neighbors(current_state, size=20)
             if not neighbors: break
             next_state = None
             if strategy == "steepest":
-                best_n = min(neighbors, key=lambda n: problem.evaluate(n))
-                if problem.evaluate(best_n) < current_eval:
+                best_n = min(neighbors, key=lambda n: eval_func(n))
+                if eval_func(best_n) < current_eval:
                     next_state = best_n
             elif strategy == "first_choice":
                 for n in neighbors:
-                    if problem.evaluate(n) < current_eval:
+                    if eval_func(n) < current_eval:
                         next_state = n
                         break
             elif strategy == "stochastic":
-                improving = [n for n in neighbors if problem.evaluate(n) < current_eval]
+                improving = [n for n in neighbors if eval_func(n) < current_eval]
                 if improving:
                     next_state = random.choice(improving)
             if next_state:
                 current_state = next_state
-                current_eval = problem.evaluate(current_state)
+                current_eval = eval_func(current_state)
             else:
                 break
-            return current_state, current_eval
 
-    def Random_Restart_Hill_Climbing(self, problem,objective=None, base_strategy="steepest", num_restarts=50):
-        """
-        Runs Hill_Climbing multiple times from different starting points to escape local optima.
-        First restart starts from problem.state, subsequent ones use a density-guided random state
-        that is biased toward slots that performed well in previous restarts.
-        """
+        return current_state, current_eval
+    def Random_Restart_Hill_Climbing(self, problem, objective=None, base_strategy="steepest", num_restarts=50):
         global_best_state = None
         global_best_eval = float('inf')
-        for every in range(num_restarts):
+        for _ in range(num_restarts):
             problem.state = problem.generate_random_state()
-            problem.state = problem.enhance(problem.state)
-            result_state, result_eval = self.Hill_Climbing_Standard(problem, strategy=base_strategy)
+            result_state, result_eval = self.Hill_Climbing(problem, objective=objective, strategy=base_strategy)
             if result_eval < global_best_eval:
                 global_best_state = result_state
                 global_best_eval = result_eval
         return global_best_state, global_best_eval
-    
     def Tabu_Search(self, problem, objective=None, restarts=5, iters=300, tabu_size=20):
         """
         Explores neighbors while maintaining a tabu list to avoid revisiting recent states.

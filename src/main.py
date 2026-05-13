@@ -23,7 +23,12 @@ cpy = copy.deepcopy(prob.state)
 
 # next_state, _ =  Optimizer.Hill_Climbing(None, prob, objective=prob.evaluate_csp, strategy="steepest")
 # next_state, _ = Optimizer.Simulated_Annealing(Optimizer,prob, objective=prob.evaluate_csp,initial_temp=100,cooling_rate=0.5,max_iterations=100,strategy="Linear")
-next_state, _ = Optimizer.Random_Restart_Hill_Climbing(Optimizer, prob,prob.evaluate_csp, "steepest", num_restarts=20)
+#tst the rr.hc of youcef
+opt = Optimizer()
+next_state, _ = opt.Random_Restart_Hill_Climbing(prob, objective=prob.evaluate_csp, base_strategy="steepest", num_restarts=20)
+#here the sa of ayoub 
+next_state2, _ = opt.Simulated_Annealing(prob, objective=prob.evaluate_csp, initial_temp=100, cooling_rate=0.5, max_iterations=1000)
+print(f"Simulated Annealing: before={prob.evaluate_csp(prob.state)} after={prob.evaluate_csp(next_state2)}")
 # next_state, _ = Optimizer.Tabu_Search(Optimizer, prob, objective=prob.evaluate_csp, restarts=3, iters=100, tabu_size=20)
 
 print(f"eval before {prob.evaluate_csp(prob.state)} eval after is {prob.evaluate_csp(next_state)}")
