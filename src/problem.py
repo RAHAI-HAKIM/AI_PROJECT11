@@ -40,10 +40,10 @@ class EnsiaProblem(Problem):
         #  eventid -> (roomid, timeslot(day, slot)) 
         if cspmethod == "local_search":
             state = self.generate_random_state() # generate a random assignment that might violate hard constraints
-            state = self.enhance(state) # does local search csp to resolve all hard constraints
             self.state = state
         else:
-            if cspmethod != "global_search": print("invalid csp method, redirecting to GS csp ...\n")
+            if cspmethod != "global_search": 
+                print("invalid csp method, redirecting to GS csp ...\n")
             self.state = self.generate_valid_state()
         
         
@@ -685,7 +685,7 @@ class EnsiaProblem(Problem):
 
         return neighbors
 
-    def generate_neighbors(self, state, event_id, size=50, shuffle=False):
+    def generate_neighbors(self, state, size=50, shuffle=False):
         """
             Uses the pipeline generator to generate n neighbors
         """
