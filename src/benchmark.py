@@ -1,48 +1,31 @@
 import sys
-
 sys.path.append("../src/")
-
 
 from problem import *
 from optimizer import *
 import copy
 
 prob = EnsiaProblem("dataset/data_s2.json")
+opt = Optimizer()
 
-# 1. Define the algorithms to test
-# Format: "Name": (Function, kwargs)
 algorithms = {
-    "Hill Climbing": (Optimizer.Hill_Climbing, {"strategy": "steepest"}),
-    "Simulated Annealing": (Optimizer.Simulated_Annealing, {
-        "initial_temp": 100, "cooling_rate": 0.9, "max_iterations": 100, "strategy": "Exponential"
-    }),
-    "Random Restart HC": (Optimizer.Random_Restart_Hill_Climbing, {
-        "base_strategy": "steepest", "num_restarts": 10
-    }),
-    "Tabu Search": (Optimizer.Tabu_Search, {
-        "restarts": 3, "iters": 10, "tabu_size": 20
-    })
+    "Hill Climbing":      (opt.Hill_Climbing,               {"strategy": "steepest"}, "soft"),
+    "Simulated Annealing":(opt.Simulated_Annealing,         {"initial_temp": 100, "cooling_rate": 0.9, "max_iterations": 100, "strategy": "Exponential"}, "soft"),
+    "Random Restart HC":  (opt.Random_Restart_Hill_Climbing,{"base_strategy": "steepest", "num_restarts": 10}, "hard"),
+    "Tabu Search":        (opt.Tabu_Search,                 {"restarts": 3, "iters": 10, "tabu_size": 20}, "soft")
 }
 
 initial_eval = prob.evaluate(prob.state)
-print(f"--- Benchmark Start (Initial Eval: {initial_eval}) ---")
+initial_hard = prob.evaluate_csp(prob.state)
+print(f"--- Benchmark Start (Initial Eval: {initial_eval:.3f}, Initial Hard: {initial_hard}) ---\n")
 
-results = {}
-
-for name, (func, kwargs) in algorithms.items():
-    # Crucial: Start each alg with a fresh clone of the problem
-    # so they don't modify the global prob.state in place
+for name, (func, kwargs, objective_type) in algorithms.items():
     test_prob = copy.deepcopy(prob)
-    
-    # Execute the algorithm
-    # Note: Using *args/**kwargs style if your Optimizer methods allow it
-    next_state, _ = func(Optimizer, test_prob, objective=test_prob.evaluate, **kwargs)
-    
+    objective = test_prob.evaluate if objective_type == "soft" else test_prob.evaluate_csp
+    next_state, _ = func(test_prob, objective=objective, **kwargs)
     final_eval = test_prob.evaluate(next_state)
-    improvement = initial_eval - final_eval # Assuming lower is better
-    
-    results[name] = final_eval
-    
-    print(f"[{name:20}] -> Before: {initial_eval} | After: {final_eval} | Change: {improvement:+}")
-
-print("--- Benchmark Complete ---")
+    hard = test_prob.evaluate_csp(next_state)
+    improvement = initial_eval - final_eval
+    status = "VALID" if hard == 0 else "INVALID"
+    print(f"[{name:20}] Before: {initial_eval:.3f} | After: {final_eval:.3f} | Change: {improvement:+.3f} | Hard: {hard} | {status}")
+print("\n--- Benchmark Complete ---")

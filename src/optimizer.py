@@ -62,7 +62,7 @@ class Optimizer:
         current_eval = eval_func(current_state)
 
         while True:
-            neighbors = problem.generate_neighbors(current_state, size=20)
+            neighbors = problem.generate_neighbors(current_state, event_id=None, size=20)
             if not neighbors: break
             next_state = None
             if strategy == "steepest":
@@ -88,12 +88,27 @@ class Optimizer:
     def Random_Restart_Hill_Climbing(self, problem, objective=None, base_strategy="steepest", num_restarts=50):
         global_best_state = None
         global_best_eval = float('inf')
+
+        is_csp = (objective == problem.evaluate_csp)
+
         for _ in range(num_restarts):
             problem.state = problem.generate_random_state()
-            result_state, result_eval = self.Hill_Climbing(problem, objective=objective, strategy=base_strategy)
+
+            if is_csp:
+                problem.generate_neighbors = lambda state, event_id=None, size=50, shuffle=False: \
+                    problem.generate_neighbors_csp(state, size)
+
+            result_state, result_eval = self.Hill_Climbing(
+                problem, objective=objective, strategy=base_strategy
+            )
+
             if result_eval < global_best_eval:
                 global_best_state = result_state
                 global_best_eval = result_eval
+
+            if global_best_eval == 0:
+                break
+
         return global_best_state, global_best_eval
     def Tabu_Search(self, problem, objective=None, restarts=5, iters=300, tabu_size=20):
         """
