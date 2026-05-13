@@ -1,0 +1,8 @@
+* `pipeline_generate_neighbors` — neighbors bypass teacher/group double-booking checks, replace with simple swap
+* `move_to_another_slot` — `(key, slot) = value` overwrites loop variable, rename to `(room_id, slot)`
+* `shifter_nifter` — `% 6` should be `% 30`
+* `swapper_napper` / `shifter_nifter` / `move_to_another_slot` — infinite recursion, add a retry limit
+* `enhance` — monkey-patches `generate_neighbors` and never restores it
+* `enhance` — restart kicks only 5 random events, should kick from violating events only i want to push on it this
+
+the hard constraints are violated because generate_neighbors is not working as it's supposed to
