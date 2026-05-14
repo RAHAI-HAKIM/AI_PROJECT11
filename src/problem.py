@@ -1,4 +1,9 @@
 from contraints import *
+from collections import defaultdict
+import copy 
+import random
+import json
+import os
 
 # This is the class that implements main problem method, specific data-driven problems will enhirit from it 
 class Problem:
@@ -60,8 +65,6 @@ class EnsiaProblem(Problem):
         Returns:
             list: [rooms, sections, groups, events, constraints]
         """
-        import json
-        import os
 
         # Check if file exists to avoid crashes
         if not os.path.exists(filename):
@@ -112,7 +115,6 @@ class EnsiaProblem(Problem):
         Returns:
             dict: A mapping of each event ID to a set of neighboring event IDs.
         """
-        from collections import defaultdict
         
         # Temporary mappings to group events by their shared properties
         teacher_map = defaultdict(set)
@@ -290,7 +292,6 @@ class EnsiaProblem(Problem):
         teacher_id = event["teacher_id"]
         groups     = self._get_event_groups(event)
 
-        import random
         # Shuffle candidates to introduce randomness in the final schedule
         candidates = list(self._domains[mrv_eid])
         random.shuffle(candidates)
@@ -382,7 +383,6 @@ class EnsiaProblem(Problem):
             for gid in self.groups_by_id
         }
 
-        from collections import defaultdict
 
         # Helper mapping to determine which year an event belongs to
         year_of_group = {g["id"]: g["year"] for g in self.groups}
@@ -490,60 +490,8 @@ class EnsiaProblem(Problem):
         Returns:
             dict: A randomly generated state mapping event_id -> (roomid, slot).
         """
-        import random
         shuffled_slots = random.sample(self.slots, len(self.events))
         return {event["id"]: slot for event, slot in zip(self.events, shuffled_slots)}
-
-    def enhance(self, state, method="hill_climbing_steepest"):
-        """
-        Applies a local search algorithm to iteratively improve a schedule 
-        by resolving hard constraint violations. Includes random restarts to escape local optima.
-
-        Args:
-            state (dict): The initial schedule assignment.
-            method (str): The local search heuristic to use (default: "hill_climbing_steepest").
-
-        Returns:
-            dict: The optimized state with minimized (ideally zero) constraint violations.
-
-        Raises:
-            ValueError: If an unknown search method is provided.
-        """
-        from optimizer import Optimizer
-        opt = Optimizer()
-
-        objective = self.evaluate_csp
-
-        MAX_RESTARTS = 20
-        current = dict(state)
-
-        method_map = {
-            "hill_climbing_steepest":        (opt.Hill_Climbing,                {"strategy": "steepest"}),
-            "hill_climbing_first":           (opt.Hill_Climbing,                {"strategy": "first_choice"}),
-            "hill_climbing_stochastic":      (opt.Hill_Climbing,                {"strategy": "stochastic"}),
-            "hill_climbing_random_restart":  (opt.Random_Restart_Hill_Climbing, {}),
-            "simulated_annealing":           (opt.Simulated_Annealing,         {"initial_temp": 100.0, "cooling_rate": 0.1, "max_iterations": 1000}),
-            "tabu_search":                   (opt.Tabu_Search,                 {}),
-        }
-        if method not in method_map:
-            raise ValueError(f"Unknown method '{method}'. Choose from {list(method_map)}")
-
-        search_fn, kwargs = method_map[method]
-
-        for i in range(MAX_RESTARTS):
-            self.state = current
-            print(f"before cost {self.evaluate_csp(self.state)}")
-            result, cost = search_fn(problem=self, objective=objective, **kwargs)
-            print(f"afte cost {cost}")
-
-            print(f"int restrat number {i}")
-
-            if cost == 0:
-                return result
-
-            current = self.generate_random_state()
-
-        return 
 
     # by the generator function for next states
     def swapper_napper(self,state,iteration=10):
@@ -551,75 +499,68 @@ class EnsiaProblem(Problem):
             given a state , returns a state there the some keys and there values are swapped
             only used for testing purposes for now.
         """
-        import random
         course = list(state.keys())
+
+        temp_state = state.copy()
 
         for i in range(iteration):
             selected1 = random.choice(course)
             selected2 = random.choice(course)
 
-            values1 = state[selected1]
+            values1 = temp_state[selected1]
 
-            state[selected1] = state[selected2]
-            state[selected2] = values1
+            temp_state[selected1] = temp_state[selected2]
+            temp_state[selected2] = values1
 
-        if not self.is_consistent(state,is_complete=True):
-            return self.swapper_napper(state)
+        if not self.is_consistent(temp_state,is_complete=True):
+            return temp_state
 
-        return state
+        return temp_state
 
-    def shifter_nifter(self,state,iteration=10,shift_rate=0.75,direction="left",amount=6):
-        """
-            Given a state , returns a state where some of its slots 
-            have beem shifted either right or left acording to some 
-            shift rate set by the caller.
-        """
-
-        if direction not in ["left","right"]:
-            # ignore, maybe the cause of cost no changing ,
-            # poke around this
+    def shifter_nifter(self, state, iteration=10, direction="left", amount=1):
+        if direction not in ["left", "right"]:
             return state
 
-        import random
-        course = list(state.keys())
+        # i head doing this is faster idk
+        new_state = state.copy()
 
-        # this is a set that contains the "used slots"
-        # its name is missleading ... we just use it to keep track
-        # of the slots we are allowed to change to
-        reverse_mapping = set()
-        for key, value in state.items():
-            reverse_mapping.add(value[1])
+        # pre-calculate available slots per room
+        room_availability = {rid: set(range(30)) for rid in self.rooms_by_id.keys()}
+        for eid, (rid, slot) in new_state.items():
+            if rid in room_availability:
+                room_availability[rid].discard(slot)
 
-        for i in range(iteration):
-            target_event = random.choice(course)
-            # get the slot
-            (room_id,target_slot) = state[target_event]
-            next_slot = target_slot
+        events = list(new_state.keys())
 
-            if direction == "left":
-                next_slot -= amount
-            else:
-                next_slot += amount
+        for _ in range(iteration):
+            target_event = random.choice(events)
+            room_id, old_slot = new_state[target_event]
 
-            if next_slot < 0:
-                next_slot = 0
-            else:
-                next_slot %= 6
+            # calc the shifted slot based on parameters
+            shift = -amount if direction == "left" else amount
+            # wrap around the week/day
+            ideal_slot = (old_slot + shift) % 30            
+            # logic: if the ideal shifted slot is free, take it. 
+            # otherwise, this specitic shift is invalid.
+            if ideal_slot in room_availability[room_id]:
+                # apply Move
+                new_state[target_event] = (room_id, ideal_slot)
+                room_availability[room_id].remove(ideal_slot)
+                room_availability[room_id].add(old_slot)
 
-            if next_slot not in reverse_mapping:
-                state[target_event] = (room_id,next_slot)
+                if self.is_consistent(new_state, is_complete=True):
+                    return new_state
+                else:
+                    new_state[target_event] = (room_id, old_slot)
+                    room_availability[room_id].add(ideal_slot)
+                    room_availability[room_id].remove(old_slot)
 
-        if not self.is_consistent(state):
-            return self.shifter_nifter(state)
+        return state # Return original if no valid shifts were found
 
-        return state
-    
     def move_to_another_slot(self,state,iteration=10):
         """
             Returns another state where some events have there slots changed completly
         """
-
-        import random
 
         all_rooms = [key for key,_ in self.rooms_by_id.items()]
         ## initial population
@@ -628,11 +569,10 @@ class EnsiaProblem(Problem):
             available_slots[room_id] = set([i for i in range(5*6)])
 
         # Purge the set of all slots and remove the onces used 
-        # to get the onces avaiblble .... amazing comment
-        for key, value in state.items():
-            (key, slot) = value
+        # to get the onces available 
+        for key, (room_id,slot) in state.items():
             if slot in available_slots:
-                available_slots[key].remove(slot)
+                available_slots[room_id].remove(slot)
 
         events = list(state.keys())
 
@@ -651,7 +591,7 @@ class EnsiaProblem(Problem):
             available_slots[roomd_id].add(slot)
 
         if not self.is_consistent(state):
-            return self.move_to_another_slot(state)
+            return self.move_to_another_slot(fall_back)
 
         return state
 
@@ -664,16 +604,15 @@ class EnsiaProblem(Problem):
             WARNING: this function assumes the state given is a valid state , therefore it wont work as 
             expected in case of solving a CSP using local search
         """
-        import copy
         neighbors = []
 
         for _ in range(size):
-            n = copy.deepcopy(state)
+            n = state.copy()
 
             n = self.move_to_another_slot(n, iteration=10)
             n = self.swapper_napper(n, iteration=5)
-            n = self.shifter_nifter(n, iteration=10, shift_rate=0.5, direction="left", amount=4)
-            n = self.shifter_nifter(n, iteration=10, shift_rate=0.5, direction="right", amount=4)
+            n = self.shifter_nifter(n, iteration=10, direction="left", amount=4)
+            n = self.shifter_nifter(n, iteration=10, direction="right", amount=4)
 
             neighbors.append(n)
 
@@ -692,8 +631,6 @@ class EnsiaProblem(Problem):
         return self.pipeline_generate_neighbors(state,size=1)[0]
 
     def generate_neighbors_csp(self, state, size=50):
-        import random
-        import copy
         neighbors = []
         event_ids = list(state.keys())
         for _ in range(size):
@@ -705,8 +642,6 @@ class EnsiaProblem(Problem):
         return neighbors
     
     def move_operator_csp(self, state):
-        import random
-        import copy
         n = copy.deepcopy(state)
         eid = random.choice(list(state.keys()))
         n[eid] = random.choice(self.slots)
