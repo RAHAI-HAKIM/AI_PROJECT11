@@ -1,120 +1,82 @@
 from contraints import *
+import random
+import copy
+from collections import defaultdict
 
-# This is the class that implements main problem method, specific data-driven problems will enhirit from it 
+
 class Problem:
     pass
 
-# ensia specific problem class
+
 class EnsiaProblem(Problem):
     def __init__(self, dataset, cspmethod="global_search"):
         super().__init__()
 
-        # load data elements
         data = self.load_data(dataset)
-        self.rooms = data[0]
+        self.rooms  = data[0]
         self.events = data[3]
         self.groups = data[2]
-        # a table that stores the assignment of groups to section section_id => [group_id, group_id, ..]
-        self.section_to_group = {section["id"] : [] for section in data[1]}
-        for group in self.groups: self.section_to_group[group["section_id"]].append(group["id"])
-        # access data elements by their id
-        self.events_by_id = {e["id"]: e for e in self.events}
-        self.rooms_by_id  = {r["id"]:  r for r in self.rooms}
-        self.groups_by_id  = {r["id"]:  r for r in self.groups}
 
-        # fill the (room, time) tuple, assuming time is a number from 0-29
-        slots = []
-        for r in self.rooms:
-            for t in range(30):
-                slots.append((r["id"], t))
-        self.slots = slots
-        
-        # get constraint list -not handled yet-
+        self.section_to_group = {section["id"]: [] for section in data[1]}
+        for group in self.groups:
+            self.section_to_group[group["section_id"]].append(group["id"])
+
+        self.events_by_id = {e["id"]: e for e in self.events}
+        self.rooms_by_id  = {r["id"]: r for r in self.rooms}
+        self.groups_by_id = {g["id"]: g for g in self.groups}
+
+        # (room_id, slot_index) pairs — slot_index 0-29
+        self.slots = [(r["id"], t) for r in self.rooms for t in range(30)]
+
         self.hard_constraints_list = data[4].get("hard", [])
         self.soft_constraints_list = data[4].get("soft", [])
+        self.constraint_obj        = Constraints(self)
 
-        # constraint object to hold the methods
-        self.constraint_obj = Constraints(self)
-
-        # the state of the problem is a dict in the form:
-        #  eventid -> (roomid, timeslot(day, slot)) 
         if cspmethod == "local_search":
-            state = self.generate_random_state() # generate a random assignment that might violate hard constraints
-            state = self.enhance(state) # does local search csp to resolve all hard constraints
-            self.state = state
+            state = self.generate_random_state()
+            self.state = self.enhance(state)
         else:
-            if cspmethod != "global_search": print("invalid csp method, redirecting to GS csp ...\n")
+            if cspmethod != "global_search":
+                print("invalid csp method, redirecting to GS csp ...\n")
             self.state = self.generate_valid_state()
-        
-        
 
+    # ------------------------------------------------------------------ #
+    #  Data loading                                                        #
+    # ------------------------------------------------------------------ #
 
     def load_data(self, filename):
-        """
-        Loads the semester JSON data and converts the dictionary structure into 
-        an indexed list format compatible with the constructor.
-        
-        Args:
-            filename (str): Path to the data_sX.json file.
-            
-        Returns:
-            list: [rooms, sections, groups, events, constraints]
-        """
-        import json
-        import os
-
-        # Check if file exists to avoid crashes
+        import json, os
         if not os.path.exists(filename):
-            raise FileNotFoundError(f"Dataset file {filename} not found.")
-        
+            raise FileNotFoundError(f"Dataset file '{filename}' not found.")
         with open(filename, 'r', encoding='utf-8') as f:
-            raw_data = json.load(f)
-        
-        # Mapping dict keys to the specific list order expected by __init__
-        # data[0]=rooms, [1]=sections, [2]=groups, [3]=events, [4]=constraints
+            raw = json.load(f)
         return [
-            raw_data.get("rooms", []),
-            raw_data.get("sections", []),
-            raw_data.get("groups", []),
-            raw_data.get("activities", []),
-            raw_data.get("constraints", {})
+            raw.get("rooms",       []),
+            raw.get("sections",    []),
+            raw.get("groups",      []),
+            raw.get("activities",  []),
+            raw.get("constraints", {}),
         ]
-    
-    # CSP Global
+
+    # ------------------------------------------------------------------ #
+    #  Helpers                                                             #
+    # ------------------------------------------------------------------ #
 
     def _get_event_groups(self, event):
-        """
-        Retrieves the list of student group IDs associated with a specific event.
-        If the event is a lecture, it fetches all groups within that section.
-        Otherwise, it returns the single group targeted by the event.
-        
-        Args:
-            event (dict): The event dictionary containing 'type_id' and 'target_id'.
-            
-        Returns:
-            list: A list of student group IDs attending this event.
-        """
-        # Type ID 1 indicates a lecture, which targets an entire section
+        """Return the list of group IDs that attend this event."""
         if event["type_id"] == 1:
             return self.section_to_group[event["target_id"]]
-        
-        # Otherwise, the target is just a single group
         return [event["target_id"]]
+
+    # ------------------------------------------------------------------ #
+    #  CSP — Global (backtracking + forward checking)                     #
+    # ------------------------------------------------------------------ #
 
     def _precompute_neighbours(self, event_ids):
         """
-        Builds an adjacency graph of events to facilitate rapid constraint checking.
-        Events are considered neighbors if they share a teacher, course, or student group.
-        
-        Args:
-            event_ids (iterable): A list or set of event IDs to process.
-            
-        Returns:
-            dict: A mapping of each event ID to a set of neighboring event IDs.
+        Two events are neighbours if they share a teacher, a student group,
+        or the same course (so scheduling rules between them matter).
         """
-        from collections import defaultdict
-        
-        # Temporary mappings to group events by their shared properties
         teacher_map = defaultdict(set)
         group_map   = defaultdict(set)
         course_map  = defaultdict(set)
@@ -126,7 +88,6 @@ class EnsiaProblem(Problem):
             for gid in self._get_event_groups(e):
                 group_map[gid].add(eid)
 
-        # Build the final neighbor sets using the temporary mappings
         neighbours = {eid: set() for eid in event_ids}
         for eid in event_ids:
             e = self.events_by_id[eid]
@@ -134,111 +95,85 @@ class EnsiaProblem(Problem):
             neighbours[eid] |= course_map[e["course_name"]]
             for gid in self._get_event_groups(e):
                 neighbours[eid] |= group_map[gid]
-                
-            # An event cannot be its own neighbor
-            neighbours[eid].discard(eid)  
+            neighbours[eid].discard(eid)
 
         return neighbours
 
     def _build_initial_domain(self, event_id):
-        """
-        Generates the initial domain of all valid (room, time_slot) pairs for a given event.
-        
-        Args:
-            event_id (int/str): The unique identifier for the event.
-            
-        Returns:
-            set: A set of tuples formatted as (room_id, slot_index), checking across all 30 slots.
-        """
-        event        = self.events_by_id[event_id]
         compat_rooms = self.event_compatible_rooms[event_id]
-        
-        # Cross-product of all compatible rooms and all 30 weekly time slots
         return {(r, s) for r in compat_rooms for s in range(30)}
 
-    def _removed_by_assignment(self, assigned_eid, roomid, slot, unassigned_set, neighbours):
+    def _removed_by_assignment(self, assigned_eid, roomid, slot,
+                                unassigned_set, neighbours):
         """
-        Performs forward checking by finding and pruning domain values from unassigned 
-        neighboring events that are invalidated by the current assignment.
-        
-        Args:
-            assigned_eid (int/str): The ID of the event just assigned.
-            roomid (int/str): The room ID assigned to the event.
-            slot (int): The time slot (0-29) assigned to the event.
-            unassigned_set (set): The current set of unassigned event IDs.
-            neighbours (dict): The precomputed event adjacency graph.
-            
-        Returns:
-            dict: A mapping of neighbor IDs to the set of (room, slot) tuples that must be removed.
+        Forward-checking: return {neighbour_eid: set_of_(room,slot)_to_remove}.
+        Only prunes values that provably violate a hard constraint.
         """
-        # Extract properties of the newly assigned event
-        assigned_event   = self.events_by_id[assigned_eid]
-        assigned_teacher = assigned_event["teacher_id"]
-        assigned_groups  = set(self._get_event_groups(assigned_event))
-        assigned_course  = assigned_event["course_name"]
-        assigned_is_lec  = (assigned_event["type_id"] == 1)
-        
-        # Calculate day (0-4) and time of day (0-5)
-        assigned_day     = slot // 6
-        assigned_time    = slot % 6
+        ae          = self.events_by_id[assigned_eid]
+        a_teacher   = ae["teacher_id"]
+        a_groups    = set(self._get_event_groups(ae))
+        a_course    = ae["course_name"]
+        a_is_lec    = (ae["type_id"] == 1)
+        a_section   = ae["target_id"] if a_is_lec else None
+        a_day       = slot // 6
 
         removals = {}
 
-        # Iterate only through neighbors that haven't been assigned yet
         for neid in neighbours[assigned_eid]:
             if neid not in unassigned_set:
                 continue
 
-            # Extract properties of the neighboring event
-            nevent      = self.events_by_id[neid]
-            nteacher    = nevent["teacher_id"]
-            ngroups     = set(self._get_event_groups(nevent))
-            ncourse     = nevent["course_name"]
-            n_is_lec    = (nevent["type_id"] == 1)
-            
-            shared_grps = assigned_groups & ngroups
-            same_course = (ncourse == assigned_course)
+            ne        = self.events_by_id[neid]
+            n_teacher = ne["teacher_id"]
+            n_groups  = set(self._get_event_groups(ne))
+            n_course  = ne["course_name"]
+            n_is_lec  = (ne["type_id"] == 1)
+            n_section = ne["target_id"] if n_is_lec else None
+
+            shared_grps  = a_groups & n_groups
+            same_course  = (n_course == a_course)
+            # FIX: consecutive-lecture rule only applies when BOTH lectures
+            # belong to the SAME section (same target_id).
+            same_section = (a_is_lec and n_is_lec and a_section == n_section)
 
             to_remove = set()
-            domain    = self._domains[neid]
 
-            # Check each possibility in the neighbor's current domain
-            for (nr, ns) in domain:
+            for (nr, ns) in self._domains[neid]:
                 nday  = ns // 6
                 ntime = ns % 6
                 bad   = False
 
-                # Prevent double-booking the same room
+                # Hard: no room double-booking
                 if nr == roomid and ns == slot:
                     bad = True
 
-                # Prevent double-booking the same teacher
-                elif nteacher == assigned_teacher and ns == slot:
+                # Hard: no teacher double-booking
+                elif n_teacher == a_teacher and ns == slot:
                     bad = True
 
-                # Prevent double-booking overlapping student groups
+                # Hard: no group double-booking
                 elif shared_grps and ns == slot:
                     bad = True
 
-                # Handle course-specific scheduling rules
                 elif same_course and shared_grps:
-                    # Lectures and practice sessions for the same course cannot be on the same day
-                    if (assigned_is_lec and not n_is_lec) or \
-                       (not assigned_is_lec and n_is_lec):
-                        if nday == assigned_day:
+                    # Lecture + practice of same course & shared groups
+                    # cannot be on the same day
+                    if a_is_lec != n_is_lec:
+                        if nday == a_day:
                             bad = True
-
-                    # Multiple lectures for the same course must be consecutive
-                    elif assigned_is_lec and n_is_lec:
-                        adj = {slot - 1, slot + 1}
-                        adj = {a for a in adj if a // 6 == assigned_day and 0 <= a % 6 <= 5}
+                    # Two lectures of the SAME section must be consecutive
+                    elif same_section:
+                        adj = set()
+                        for candidate in (slot - 1, slot + 1):
+                            if candidate // 6 == a_day and 0 <= candidate % 6 < 6:
+                                adj.add(candidate)
                         if ns not in adj:
                             bad = True
 
-                # Prevent groups from having more than 3 consecutive classes
-                if not bad and shared_grps and nday == assigned_day:
+                # Hard: no group has > 3 consecutive slots in one day
+                if not bad and shared_grps and nday == a_day:
                     for gid in shared_grps:
-                        times_set = self.group_day_times[gid][assigned_day]
+                        times_set = self.group_day_times[gid][a_day]
                         if len(times_set) >= 3:
                             ts = sorted(times_set | {ntime})
                             run = max_run = 1
@@ -249,7 +184,6 @@ class EnsiaProblem(Problem):
                                 bad = True
                                 break
 
-                # If the domain value violates a rule, mark it for removal
                 if bad:
                     to_remove.add((nr, ns))
 
@@ -259,39 +193,20 @@ class EnsiaProblem(Problem):
         return removals
 
     def _bt(self, unassigned_set, state, neighbours):
-        """
-        Executes a recursive backtracking search to assign rooms and time slots to all events.
-        Uses Minimum Remaining Values (MRV) to pick the next event and Forward Checking to 
-        fail early if a domain wipeout occurs.
-        
-        Args:
-            unassigned_set (set): Event IDs that still need assignments.
-            state (dict): The current partial schedule mapping event_ids to (room, slot).
-            neighbours (dict): The precomputed event adjacency graph.
-            
-        Returns:
-            dict or None: The completed state dictionary if successful, or None if no valid assignment exists.
-        """
-        # Base case: All events are assigned
+        """Recursive backtracking with MRV + forward checking."""
         if not unassigned_set:
-            if self.is_consistent(state, is_complete=True):
-                return state
-            return None
+            return state if self.is_consistent(state, is_complete=True) else None
 
-        # MRV Heuristic: Pick the event with the fewest valid domain options left
+        # MRV: pick the event with the smallest remaining domain
         mrv_eid = min(unassigned_set, key=lambda e: len(self._domains[e]))
-
-        # Domain wipeout: No valid options left for this event
         if not self._domains[mrv_eid]:
-            return None     
+            return None
 
         unassigned_set.remove(mrv_eid)
         event      = self.events_by_id[mrv_eid]
         teacher_id = event["teacher_id"]
         groups     = self._get_event_groups(event)
 
-        import random
-        # Shuffle candidates to introduce randomness in the final schedule
         candidates = list(self._domains[mrv_eid])
         random.shuffle(candidates)
 
@@ -299,7 +214,7 @@ class EnsiaProblem(Problem):
             day  = slot // 6
             time = slot % 6
 
-            # Apply the tentative assignment
+            # Tentative assignment
             state[mrv_eid] = (roomid, slot)
             self.busy_rooms.add((roomid, slot))
             self.busy_teachers.add((teacher_id, slot))
@@ -307,33 +222,41 @@ class EnsiaProblem(Problem):
                 self.busy_groups.add((gid, slot))
                 self.group_day_times[gid][day].add(time)
 
-            # Perform forward checking to prune neighbor domains
+            # Neighbour-based forward checking (teacher, group, course rules)
             removals = self._removed_by_assignment(
-                mrv_eid, roomid, slot, unassigned_set, neighbours
-            )
-            
-            # Check if applying these removals empties any neighbor's domain completely
+                mrv_eid, roomid, slot, unassigned_set, neighbours)
+
+            # FIX: also prune (roomid, slot) from ALL unassigned events regardless
+            # of neighbour relationship — two unrelated events can still clash in
+            # the same room at the same time, and _removed_by_assignment only
+            # iterates over neighbours so it would miss this.
+            room_slot_pair = (roomid, slot)
+            for neid in unassigned_set:
+                if room_slot_pair in self._domains[neid]:
+                    if neid in removals:
+                        removals[neid].add(room_slot_pair)
+                    else:
+                        removals[neid] = {room_slot_pair}
+
+            # Use set-difference to detect wipeout accurately
             wipeout = any(
-                len(self._domains[n]) - len(rm) == 0
+                len(self._domains[n] - rm) == 0
                 for n, rm in removals.items()
             )
 
-            # If no wipeout, proceed with recursion
             if not wipeout:
-                # Remove invalid options from neighbor domains
                 for n, rm in removals.items():
                     self._domains[n] -= rm
 
-                # Recursively solve the rest of the schedule
                 result = self._bt(unassigned_set, state, neighbours)
                 if result is not None:
                     return result
 
-                # Backtrack: Restore neighbor domains if recursion failed
+                # Restore pruned domains on backtrack
                 for n, rm in removals.items():
                     self._domains[n] |= rm
 
-            # Backtrack: Undo the tentative assignment and clean up trackers
+            # Undo tentative assignment
             del state[mrv_eid]
             self.busy_rooms.discard((roomid, slot))
             self.busy_teachers.discard((teacher_id, slot))
@@ -341,39 +264,28 @@ class EnsiaProblem(Problem):
                 self.busy_groups.discard((gid, slot))
                 self.group_day_times[gid][day].discard(time)
 
-        # Restore the event to the unassigned pool before returning failure
         unassigned_set.add(mrv_eid)
         return None
 
     def generate_valid_state(self):
         """
-        Initializes the CSP solver, precomputes valid rooms, divides the problem into 
-        sub-problems by student year, and runs the backtracking algorithm to generate 
-        the full schedule.
-        
-        Args:
-            None
-            
-        Returns:
-            dict: The complete valid schedule mapping event_ids to (room, slot).
-            
-        Raises:
-            RuntimeError: If an event has no compatible rooms or a valid schedule cannot be found.
+        Build a fully hard-constraint-satisfying schedule using
+        backtracking + forward checking, solved year by year.
         """
-        # Precompute all compatible rooms for every event based on capacity and type
-        # for each event id , we store the rooms that we are sure that we can book there
+        # Precompute compatible rooms per event
         self.event_compatible_rooms = {}
         for event in self.events:
             compat = [
                 r["id"] for r in self.rooms
-                if r["capacity"] >= event["headcount"]
+                if r["capacity"]      >= event["headcount"]
                 and r["room_type_id"] == event["required_room_type_id"]
             ]
             if not compat:
-                raise RuntimeError(f"Event {event['id']} ({event['name']}) has no compatible rooms!")
+                raise RuntimeError(
+                    f"Event {event['id']} ('{event['name']}') has no compatible rooms!")
             self.event_compatible_rooms[event["id"]] = compat
 
-        # Initialize global tracking sets for fast collision detection
+        # Shared trackers across all years (cross-year conflict detection)
         self.busy_rooms    = set()
         self.busy_teachers = set()
         self.busy_groups   = set()
@@ -382,14 +294,12 @@ class EnsiaProblem(Problem):
             for gid in self.groups_by_id
         }
 
-        from collections import defaultdict
-
-        # Helper mapping to determine which year an event belongs to
-        year_of_group = {g["id"]: g["year"] for g in self.groups}
+        # Group events by student year so we solve smaller sub-problems
+        year_of_group   = {g["id"]: g["year"] for g in self.groups}
         year_of_section = {}
-        for section_id, gids in self.section_to_group.items():
+        for sid, gids in self.section_to_group.items():
             if gids:
-                year_of_section[section_id] = year_of_group[gids[0]]
+                year_of_section[sid] = year_of_group[gids[0]]
 
         def event_year(eid):
             e = self.events_by_id[eid]
@@ -397,53 +307,52 @@ class EnsiaProblem(Problem):
                 return year_of_section.get(e["target_id"], 0)
             return year_of_group.get(e["target_id"], 0)
 
-        # Group events by year to solve in smaller, isolated batches
         by_year = defaultdict(list)
         for e in self.events:
             by_year[event_year(e["id"])].append(e["id"])
-            
+
         full_state = {}
 
-        # Solve the schedule sequentially, year by year
         for year, eids in sorted(by_year.items()):
-            neighbours = self._precompute_neighbours(eids)
-
-            # Initialize domain for this subset of events
+            neighbours    = self._precompute_neighbours(eids)
             self._domains = {eid: self._build_initial_domain(eid) for eid in eids}
+
+            # FIX: prune domains against slots already committed by earlier years
+            # so cross-year room/teacher/group conflicts are eliminated upfront.
+            for eid in eids:
+                e          = self.events_by_id[eid]
+                teacher_id = e["teacher_id"]
+                groups     = self._get_event_groups(e)
+                pruned     = set()
+                for (r, s) in self._domains[eid]:
+                    if   (r,          s) in self.busy_rooms:   pruned.add((r, s))
+                    elif (teacher_id, s) in self.busy_teachers: pruned.add((r, s))
+                    else:
+                        for gid in groups:
+                            if (gid, s) in self.busy_groups:
+                                pruned.add((r, s))
+                                break
+                self._domains[eid] -= pruned
 
             unassigned = set(eids)
             sub_state  = {}
-
-            # Run backtracking on this specific year
             result = self._bt(unassigned, sub_state, neighbours)
             if result is None:
                 raise RuntimeError(
-                    f"No valid schedule found for year {year} — constraints may be too tight."
-                )
-                
-            # Merge the sub-schedule into the full schedule
+                    f"No valid schedule found for year {year} — "
+                    "constraints may be too tight.")
             full_state.update(result)
 
         return full_state
 
     def is_consistent(self, state, is_complete=False):
         """
-        Validates the current state against all hard constraints that are not already handled 
-        by the forward-checking logic.
-        
-        Args:
-            state (dict): The current schedule mapping event_ids to (room, slot).
-            is_complete (bool): Indicates if the state is complete (all events assigned).
-            
-        Returns:
-            bool: True if the state violates no active hard constraints, False otherwise.
+        Validate state against hard constraints NOT covered by forward-checking.
         """
-        # Build lookup tables necessary for evaluating complex external constraints
         slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = \
             self.constraint_obj._build_lookup_tables(state)
         c = self.constraint_obj
 
-        # Map constraint categories to the required arguments for their specific functions
         category_args = {
             "slot_to_rooms":    (slot_to_rooms,),
             "slot_to_groups":   (slot_to_groups,),
@@ -452,135 +361,119 @@ class EnsiaProblem(Problem):
             "teacher_based":    (teacher_events,),
         }
 
-        # These rules are enforced during domain pruning, so we skip them here for efficiency
-        forward_checked_rules = [
-            "NO_ROOM_DOUBLE_BOOKING", 
-            "NO_GROUP_DOUBLE_BOOKING", 
+        # Guaranteed by forward-checking; skip for speed
+        forward_checked = {
+            "NO_ROOM_DOUBLE_BOOKING",
+            "NO_GROUP_DOUBLE_BOOKING",
             "NO_TEACHER_DOUBLE_BOOKING",
-            "ROOM_CAPACITY_GEQ_HEADCOUNT", 
+            "ROOM_CAPACITY_GEQ_HEADCOUNT",
             "MATCH_ROOM_TYPE",
             "CONSECUTIVE_SECTION_LECTURES",
             "SEPARATE_LECTURE_PRACTICE",
-            "MAX_CONSECUTIVE_STUDENT_SLOTS_3"
-        ]
+            "MAX_CONSECUTIVE_STUDENT_SLOTS_3",
+        }
 
-        # Evaluate all remaining hard constraints dynamically
         for hc in self.hard_constraints_list:
-            if isinstance(hc, str): continue 
-            
-            rule = hc["rule"]
-            if rule in forward_checked_rules:
-                continue 
-
-            # Dynamically call the constraint function and fail if it returns False
-            fn   = getattr(c, rule)
-            args = category_args[hc["category"]]
-            if not fn(*args, count=False): 
+            if isinstance(hc, str):
+                continue
+            if hc["rule"] in forward_checked:
+                continue
+            fn = getattr(c, hc["rule"])
+            if not fn(*category_args[hc["category"]], count=False):
                 return False
-                
+
         return True
-    
-    # CSP Local
+
+    # ------------------------------------------------------------------ #
+    #  CSP — Local search                                                  #
+    # ------------------------------------------------------------------ #
 
     def generate_random_state(self):
-        """
-        Generates a random schedule assignment, but with no double booking.
-        Used primarily as the initial starting point for local search algorithms.
-
-        Returns:
-            dict: A randomly generated state mapping event_id -> (roomid, slot).
-        """
-        import random
-        shuffled_slots = random.sample(self.slots, len(self.events))
-        return {event["id"]: slot for event, slot in zip(self.events, shuffled_slots)}
+        """Random assignment with no duplicate (room, slot) pairs."""
+        n = len(self.events)
+        if n > len(self.slots):
+            raise RuntimeError(
+                f"Not enough slots ({len(self.slots)}) for {n} events.")
+        sampled = random.sample(self.slots, n)
+        return {event["id"]: slot for event, slot in zip(self.events, sampled)}
 
     def enhance(self, state, method="hill_climbing_steepest", objective=None):
         """
-        Applies a local search algorithm to iteratively improve a schedule 
-        by resolving hard constraint violations. Includes random restarts to escape local optima.
-
-        Args:
-            state (dict): The initial schedule assignment.
-            method (str): The local search heuristic to use (default: "hill_climbing_steepest").
-
-        Returns:
-            dict: The optimized state with minimized (ideally zero) constraint violations.
-
-        Raises:
-            ValueError: If an unknown search method is provided.
+        Local search to drive hard violations to zero, with random restarts.
+        Instance-level method overrides are cleaned up in a finally block so
+        subsequent soft-optimisation calls use the correct neighbour functions.
         """
-        # here we optimize the constraint
         from optimizer import Optimizer
         opt = Optimizer()
-    
+
         if objective is None:
             objective = self.evaluate_csp
-    
-        # use CSP-safe neighbors when solving hard constraints
+
+        # Temporarily patch neighbour generators for the CSP phase
         if objective == self.evaluate_csp:
-            self.generate_neighbors = lambda state, event_id=None, size=50, shuffle=False: self.generate_neighbors_csp(state, size)
-            self.move_operator      = lambda state, shuffle=False: self.move_operator_csp(state)
-    
-        MAX_RESTARTS = 50
-        current = dict(state)
-    
+            self.generate_neighbors = \
+                lambda state, event_id=None, size=50, shuffle=False: \
+                self.generate_neighbors_csp(state, size)
+            self.move_operator = \
+                lambda state, shuffle=False: self.move_operator_csp(state)
+
         method_map = {
-            "hill_climbing_steepest":        (opt.Hill_Climbing,                {"strategy": "steepest"}),
-            "hill_climbing_first":           (opt.Hill_Climbing,                {"strategy": "first_choice"}),
-            "hill_climbing_stochastic":      (opt.Hill_Climbing,                {"strategy": "stochastic"}),
-            "hill_climbing_random_restart":  (opt.Random_Restart_Hill_Climbing, {}),
-            "simulated_annealing":           (opt.Simulated_Annealing,         {"initial_temp": 100.0, "cooling_rate": 0.1, "max_iterations": 1000}),
-            "tabu_search":                   (opt.Tabu_Search,                 {}),
+            "hill_climbing_steepest":       (opt.Hill_Climbing,
+                                             {"strategy": "steepest"}),
+            "hill_climbing_first":          (opt.Hill_Climbing,
+                                             {"strategy": "first_choice"}),
+            "hill_climbing_stochastic":     (opt.Hill_Climbing,
+                                             {"strategy": "stochastic"}),
+            "hill_climbing_random_restart": (opt.Random_Restart_Hill_Climbing,
+                                             {}),
+            "simulated_annealing":          (opt.Simulated_Annealing,
+                                             {"initial_temp": 100.0,
+                                              "cooling_rate": 0.1,
+                                              "max_iterations": 1000}),
+            "tabu_search":                  (opt.Tabu_Search, {}),
         }
         if method not in method_map:
-            raise ValueError(f"Unknown method '{method}'. Choose from {list(method_map)}")
-    
+            raise ValueError(
+                f"Unknown method '{method}'. Choose from {list(method_map)}")
+
         search_fn, kwargs = method_map[method]
-    
-        for _ in range(MAX_RESTARTS):
-            self.state = current
-            result, cost = search_fn(problem=self, objective=objective, **kwargs)
-    
-            if cost == 0:
-                return result
-    
-            import random
-            kicked = dict(result)
-            for _ in range(5):
-                eid = random.choice(list(kicked.keys()))
-                kicked[eid] = random.choice(self.slots)
-            current = kicked
-    
-        return result 
-    # We define the following as a actions to be performed 
-    # by the generator function for next states
-    def swapper_napper(self,state,iteration=10):
-        """
-            given a state , returns a state there the some keys and there values are swapped
-            only used for testing purposes for now.
-        """
-        import random
-        course = list(state.keys())
+        current = dict(state)
+        result  = current
 
-        for i in range(iteration):
-            selected1 = random.choice(course)
-            selected2 = random.choice(course)
+        try:
+            for _ in range(50):
+                self.state = current
+                result, cost = search_fn(problem=self, objective=objective,
+                                         **kwargs)
+                if cost == 0:
+                    return result
 
-            values1 = state[selected1]
+                # Random kick to escape local optimum
+                kicked = dict(result)
+                for _ in range(5):
+                    eid = random.choice(list(kicked))
+                    kicked[eid] = random.choice(self.slots)
+                current = kicked
+        finally:
+            # FIX: always restore original class-level methods
+            if objective == self.evaluate_csp:
+                for attr in ("generate_neighbors", "move_operator"):
+                    try:
+                        delattr(self, attr)
+                    except AttributeError:
+                        pass
 
-            state[selected1] = state[selected2]
-            state[selected2] = values1
+        return result
 
-        if not self.is_consistent(state,is_complete=True):
-            return self.swapper_napper(state)
-
-        return state
+    # ------------------------------------------------------------------ #
+    #  Violation helpers                                                   #
+    # ------------------------------------------------------------------ #
 
     def _get_violating_events(self, state):
-        from collections import defaultdict
         slot_to_rooms    = defaultdict(list)
         slot_to_teachers = defaultdict(list)
         slot_to_groups   = defaultdict(list)
+
         for event_id, (roomid, slot) in state.items():
             event = self.events_by_id[event_id]
             slot_to_rooms[(roomid, slot)].append(event_id)
@@ -590,6 +483,7 @@ class EnsiaProblem(Problem):
                     slot_to_groups[(gid, slot)].append(event_id)
             else:
                 slot_to_groups[(event["target_id"], slot)].append(event_id)
+
         violating = set()
         for eids in slot_to_rooms.values():
             if len(eids) > 1: violating.update(eids)
@@ -597,165 +491,282 @@ class EnsiaProblem(Problem):
             if len(eids) > 1: violating.update(eids)
         for eids in slot_to_groups.values():
             if len(eids) > 1: violating.update(eids)
+
         return list(violating) if violating else list(state.keys())
-    def shifter_nifter(self,state,iteration=10,shift_rate=0.75,direction="left",amount=6):
-        """
-            Given a state , returns a state where some of its slots 
-            have beem shifted either right or left acording to some 
-            shift rate set by the caller.
-        """
 
-        if direction not in ["left","right"]:
-            # ignore, maybe the cause of cost no changing ,
-            # poke around this
-            return state
-
-        import random
-        course = list(state.keys())
-
-        # this is a set that contains the "used slots"
-        # its name is missleading ... we just use it to keep track
-        # of the slots we are allowed to change to
-        reverse_mapping = set()
-        for key, value in state.items():
-            reverse_mapping.add(value[1])
-
-        for i in range(iteration):
-            target_event = random.choice(course)
-            # get the slot
-            (room_id,target_slot) = state[target_event]
-            next_slot = target_slot
-
-            if direction == "left":
-                next_slot -= amount
-            else:
-                next_slot += amount
-
-            if next_slot < 0:
-                next_slot = 0
-            else:
-                next_slot %= 6
-
-            if next_slot not in reverse_mapping:
-                state[target_event] = (room_id,next_slot)
-
-        if not self.is_consistent(state):
-            return self.shifter_nifter(state)
-
-        return state
-    
-    def move_to_another_slot(self,state,iteration=10):
-        """
-            Returns another state where some events have there slots changed completly
-        """
-
-        import random
-
-        all_rooms = [key for key,_ in self.rooms_by_id.items()]
-        ## initial population
-        available_slots = dict()
-        for room_id in all_rooms:
-            available_slots[room_id] = set([i for i in range(5*6)])
-
-        # Purge the set of all slots and remove the onces used 
-        # to get the onces avaiblble .... amazing comment
-        for key, value in state.items():
-            (key, slot) = value
-            if slot in available_slots:
-                available_slots[key].remove(slot)
-
-        events = list(state.keys())
-
-        for i in range(iteration):
-            # select to be swapped
-            event = random.choice(events)
-            # get previous data
-            (roomd_id, slot) = state[event]
-            # get next slot
-            next_slot = random.choice(list(available_slots[roomd_id]))
-            # update the state and the available_slots
-            # print("moving rn rn")
-            state[event] = (roomd_id, next_slot)
-
-            available_slots[roomd_id].remove(next_slot)
-            available_slots[roomd_id].add(slot)
-
-        if not self.is_consistent(state):
-            return self.move_to_another_slot(state)
-
-        return state
-
-
-    def pipeline_generate_neighbors(self, state, size=50):
-        """
-            This function will return a list of next neighbors that will be passed 
-            by reference through a pipeline of changes ... (basically is a generate_neighbors)
-
-            WARNING: this function assumes the state given is a valid state , therefore it wont work as 
-            expected in case of solving a CSP using local search
-        """
-        import copy
-        neighbors = []
-
-        for _ in range(size):
-            n = copy.deepcopy(state)
-
-            n = self.move_to_another_slot(n, iteration=10)
-            n = self.swapper_napper(n, iteration=5)
-            n = self.shifter_nifter(n, iteration=10, shift_rate=0.5, direction="left", amount=4)
-            n = self.shifter_nifter(n, iteration=10, shift_rate=0.5, direction="right", amount=4)
-
-            neighbors.append(n)
-
-        return neighbors
-
-    def generate_neighbors(self, state, event_id, size=50, shuffle=False):
-        """
-            Uses the pipeline generator to generate n neighbors
-        """
-        return self.pipeline_generate_neighbors(state,size=size)
-
-    def move_operator(self, state, shuffle=False):
-        """
-            Uses the pipeline to generate a single neighbor
-        """
-        return self.pipeline_generate_neighbors(state,size=1)[0]
-
-    def generate_neighbors_csp(self, state, size=50):
-        import random
-        import copy
-        neighbors = []
-        violating = self._get_violating_events(state)
-        for _ in range(size):
-            n = copy.deepcopy(state)
-            eid = random.choice(violating)
-            event = self.events_by_id[eid]
-            compat_rooms = [
-                r["id"] for r in self.rooms
-                if r["capacity"] >= event["headcount"]
-                and r["room_type_id"] == event["required_room_type_id"]
-            ]
-            room = random.choice(compat_rooms) if compat_rooms else random.choice([r["id"] for r in self.rooms])
-            slot = random.randint(0, 29)
-            n[eid] = (room, slot)
-            neighbors.append(n)
-        return neighbors;    
-    def move_operator_csp(self, state):
-        import random
-        import copy
-        n = copy.deepcopy(state)
-        violating = self._get_violating_events(state)
-        eid = random.choice(violating)
+    def _best_csp_assignment(self, state, eid):
+        """Greedy single-event reassignment that minimises violation count."""
         event = self.events_by_id[eid]
         compat_rooms = [
             r["id"] for r in self.rooms
-            if r["capacity"] >= event["headcount"]
+            if r["capacity"]      >= event["headcount"]
+            and r["room_type_id"] == event["required_room_type_id"]
+        ] or [r["id"] for r in self.rooms]
+
+        current_violations = len(self._get_violating_events(state))
+        best_assignment    = state[eid]
+        best_violations    = current_violations
+
+        rooms = compat_rooms[:]
+        slots = list(range(30))
+        random.shuffle(rooms)
+        random.shuffle(slots)
+
+        for room in rooms:
+            for slot in slots:
+                if (room, slot) == state[eid]:
+                    continue
+                trial = dict(state)
+                trial[eid] = (room, slot)
+                v = len(self._get_violating_events(trial))
+                if v < best_violations:
+                    best_violations = v
+                    best_assignment = (room, slot)
+                    if v == 0:
+                        return best_assignment
+
+        return best_assignment
+
+    # ------------------------------------------------------------------ #
+    #  Neighbour / move operators                                          #
+    # ------------------------------------------------------------------ #
+
+    def swapper_napper(self, state, iteration=10):
+        """Swap (room, slot) of random event pairs. No recursion."""
+        keys = list(state.keys())
+        for _ in range(iteration * 10):
+            s1 = random.choice(keys)
+            s2 = random.choice(keys)
+            if s1 == s2:
+                continue
+            state[s1], state[s2] = state[s2], state[s1]
+            if self.is_consistent(state, is_complete=True):
+                return state
+            state[s1], state[s2] = state[s2], state[s1]   # undo
+        return state
+
+    def shifter_nifter(self, state, iteration=10, shift_rate=0.75,
+                       direction="left", amount=6):
+        """
+        Shift a random event's slot by `amount` positions, clamped to [0, 29].
+        FIX: removed the broken '% 6' that collapsed slots onto [0, 5].
+        """
+        if direction not in ("left", "right"):
+            return state
+
+        keys = list(state.keys())
+        for _ in range(iteration):
+            eid = random.choice(keys)
+            room_id, cur_slot = state[eid]
+            delta    = -amount if direction == "left" else amount
+            new_slot = max(0, min(29, cur_slot + delta))
+            if new_slot != cur_slot:
+                state[eid] = (room_id, new_slot)
+
+        return state   # return as-is; caller decides whether to accept
+
+    def move_to_another_slot(self, state, iteration=10):
+        """
+        Move events to a different compatible slot.
+        FIX: only target rooms that match the event's type and capacity.
+        """
+        used = defaultdict(set)
+        for eid, (room_id, slot) in state.items():
+            used[room_id].add(slot)
+
+        available = {r["id"]: set(range(30)) - used[r["id"]] for r in self.rooms}
+        events = list(state.keys())
+
+        for _ in range(iteration):
+            eid   = random.choice(events)
+            event = self.events_by_id[eid]
+            cur_room, cur_slot = state[eid]
+
+            compat = [
+                r["id"] for r in self.rooms
+                if r["capacity"]      >= event["headcount"]
+                and r["room_type_id"] == event["required_room_type_id"]
+                and available[r["id"]]
+            ]
+            if not compat:
+                continue
+
+            new_room = random.choice(compat)
+            new_slot = random.choice(list(available[new_room]))
+
+            available[cur_room].add(cur_slot)
+            available[new_room].discard(new_slot)
+            state[eid] = (new_room, new_slot)
+
+        return state
+
+    def _find_valid_slot(self, state, eid):
+        """
+        Find a (room, slot) for event  that does not conflict with any
+        other event already in .  Returns None if no slot found.
+        Tries compatible rooms first; shuffles to avoid always picking the same slot.
+        """
+        event = self.events_by_id[eid]
+        compat_rooms = [
+            r["id"] for r in self.rooms
+            if r["capacity"]      >= event["headcount"]
             and r["room_type_id"] == event["required_room_type_id"]
         ]
-        room = random.choice(compat_rooms) if compat_rooms else random.choice([r["id"] for r in self.rooms])
-        slot = random.randint(0, 29)
-        n[eid] = (room, slot)
+        if not compat_rooms:
+            return None
+
+        # Build occupied sets from the state (excluding the event being moved)
+        occupied_rooms    = set()
+        occupied_teachers = set()
+        occupied_groups   = set()
+        teacher_id = event["teacher_id"]
+        my_groups  = set(self._get_event_groups(event))
+
+        for other_eid, (other_room, other_slot) in state.items():
+            if other_eid == eid:
+                continue
+            other_event = self.events_by_id[other_eid]
+            occupied_rooms.add((other_room, other_slot))
+            occupied_teachers.add((other_event["teacher_id"], other_slot))
+            for gid in self._get_event_groups(other_event):
+                occupied_groups.add((gid, other_slot))
+
+        all_slots = list(range(30))
+        random.shuffle(compat_rooms)
+        random.shuffle(all_slots)
+
+        for room in compat_rooms:
+            for slot in all_slots:
+                if (room, slot) == state[eid]:
+                    continue  # skip current assignment
+                if (room, slot) in occupied_rooms:
+                    continue
+                if (teacher_id, slot) in occupied_teachers:
+                    continue
+                if any((gid, slot) in occupied_groups for gid in my_groups):
+                    continue
+                return (room, slot)
+
+        return None  # no conflict-free slot found
+
+    def _try_swap(self, state, eid1, eid2):
+        """
+        Attempt to swap the (room, slot) assignments of two events.
+        Returns the new state if valid, None otherwise.
+        Swapping is cheap and produces more disruptive moves than single relocation.
+        """
+        r1, s1 = state[eid1]
+        r2, s2 = state[eid2]
+        e1 = self.events_by_id[eid1]
+        e2 = self.events_by_id[eid2]
+
+        # Check room compatibility after swap
+        if e1["headcount"] > self.rooms_by_id[r2]["capacity"]:
+            return None
+        if e1["required_room_type_id"] != self.rooms_by_id[r2]["room_type_id"]:
+            return None
+        if e2["headcount"] > self.rooms_by_id[r1]["capacity"]:
+            return None
+        if e2["required_room_type_id"] != self.rooms_by_id[r1]["room_type_id"]:
+            return None
+
+        n = dict(state)
+        n[eid1] = (r2, s2)
+        n[eid2] = (r1, s1)
+        return n if self.evaluate_csp(n) == 0 else None
+
+    def pipeline_generate_neighbors(self, state, size=50):
+        """
+        Generate neighbors using three move types for better search diversity:
+          1. Single relocation  — move one event to a new valid slot  (exploitation)
+          2. Swap               — swap two events slot assignments     (medium disruption)
+          3. Multi-relocation   — move 2-3 events at once             (exploration)
+        Neighbors that violate any hard constraint are discarded.
+        """
+        neighbors = []
+        event_ids = list(state.keys())
+        attempts  = 0
+        max_attempts = size * 15
+
+        while len(neighbors) < size and attempts < max_attempts:
+            attempts += 1
+            move_type = random.randint(0, 2)
+
+            if move_type == 0:
+                # Single relocation
+                eid = random.choice(event_ids)
+                new_slot = self._find_valid_slot(state, eid)
+                if new_slot is None:
+                    continue
+                n = dict(state)
+                n[eid] = new_slot
+                if self.evaluate_csp(n) == 0:
+                    neighbors.append(n)
+
+            elif move_type == 1:
+                # Swap two events
+                if len(event_ids) < 2:
+                    continue
+                eid1, eid2 = random.sample(event_ids, 2)
+                n = self._try_swap(state, eid1, eid2)
+                if n is not None:
+                    neighbors.append(n)
+
+            else:
+                # Multi-relocation: move 2 or 3 events sequentially
+                k = random.randint(2, 3)
+                eids = random.sample(event_ids, min(k, len(event_ids)))
+                n = dict(state)
+                ok = True
+                for eid in eids:
+                    new_slot = self._find_valid_slot(n, eid)
+                    if new_slot is None:
+                        ok = False
+                        break
+                    n[eid] = new_slot
+                if ok and self.evaluate_csp(n) == 0:
+                    neighbors.append(n)
+
+        if not neighbors:
+            neighbors.append(dict(state))
+
+        return neighbors
+
+    def generate_neighbors(self, state, event_id=None, size=50, shuffle=False):
+        if self.evaluate_csp(state) > 0:
+            return self.generate_neighbors_csp(state, size)
+        return self.pipeline_generate_neighbors(state, size=size)
+
+    def move_operator(self, state, shuffle=False):
+        if self.evaluate_csp(state) > 0:
+            return self.move_operator_csp(state)
+        return self.pipeline_generate_neighbors(state, size=1)[0]
+
+    def generate_neighbors_csp(self, state, size=50):
+        neighbors = []
+        violating = self._get_violating_events(state)
+        if not violating:
+            return [copy.deepcopy(state) for _ in range(size)]
+        for _ in range(size):
+            eid = random.choice(violating)
+            n   = copy.deepcopy(state)
+            n[eid] = self._best_csp_assignment(state, eid)
+            neighbors.append(n)
+        return neighbors
+
+    def move_operator_csp(self, state):
+        if self.evaluate_csp(state) == 0:
+            return copy.deepcopy(state)
+        violating = self._get_violating_events(state)
+        eid = random.choice(violating)
+        n   = copy.deepcopy(state)
+        n[eid] = self._best_csp_assignment(state, eid)
         return n
+
+    # ------------------------------------------------------------------ #
+    #  Objective functions                                                 #
+    # ------------------------------------------------------------------ #
+
     def evaluate(self, state):
         groups_cost = 0.0
         profs_cost  = 0.0
@@ -764,53 +775,60 @@ class EnsiaProblem(Problem):
         group_schedules = {g: [] for g in self.groups_by_id}
         prof_schedules  = {}
 
-        external_constraints = [sc for sc in self.soft_constraints_list if sc["category"] == "external"]
-        general_constraints  = [sc for sc in self.soft_constraints_list if sc["category"] == "general"]
-        group_constraints    = [sc for sc in self.soft_constraints_list if sc["category"] in ("group", "group-prof")]
-        prof_constraints     = [sc for sc in self.soft_constraints_list if sc["category"] in ("prof",  "group-prof")]
+        external_constraints = [sc for sc in self.soft_constraints_list
+                                 if sc["category"] == "external"]
+        general_constraints  = [sc for sc in self.soft_constraints_list
+                                 if sc["category"] == "general"]
+        group_constraints    = [sc for sc in self.soft_constraints_list
+                                 if sc["category"] in ("group", "group-prof")]
+        prof_constraints     = [sc for sc in self.soft_constraints_list
+                                 if sc["category"] in ("prof", "group-prof")]
 
         for ec in external_constraints:
-            constraint_function = getattr(self.constraint_obj, ec["rule"])
-            add_cost += constraint_function(state, ec["weight"])
+            add_cost += getattr(self.constraint_obj, ec["rule"])(
+                state, ec["weight"])
 
         for event_id, (roomid, slot) in state.items():
-            event_data = self.events_by_id[event_id]   # fix: [] not ()
-            if not event_data: continue
+            event_data = self.events_by_id[event_id]
+            if not event_data:
+                continue
 
             prof_id   = event_data["teacher_id"]
             target_id = event_data["target_id"]
 
             for gc in general_constraints:
-                constraint_function = getattr(self.constraint_obj, gc["rule"])
-                add_cost += constraint_function(event_data, roomid, slot, gc["weight"])
+                add_cost += getattr(self.constraint_obj, gc["rule"])(
+                    event_data, roomid, slot, gc["weight"])
 
-            if prof_id not in prof_schedules:
-                prof_schedules[prof_id] = []
-            prof_schedules[prof_id].append((roomid, slot))
+            prof_schedules.setdefault(prof_id, []).append((roomid, slot))
 
-            if event_data["type_id"] == 1:              # fix: type_id not type
-                for group_id in self.section_to_group[target_id]:
-                    group_schedules[group_id].append((roomid, slot))   # fix: no reset
+            if event_data["type_id"] == 1:
+                for gid in self.section_to_group[target_id]:
+                    group_schedules[gid].append((roomid, slot))
             else:
-                group_schedules[target_id].append((roomid, slot))      # fix: no reset
+                group_schedules[target_id].append((roomid, slot))
 
         for prof_id, sched in prof_schedules.items():
             for pc in prof_constraints:
-                constraint_function = getattr(self.constraint_obj, pc["rule"])
-                profs_cost += constraint_function(sched, pc["weight"])  # fix: local fn
+                profs_cost += getattr(self.constraint_obj, pc["rule"])(
+                    sched, pc["weight"])
 
         for group_id, sched in group_schedules.items():
             for grc in group_constraints:
-                constraint_function = getattr(self.constraint_obj, grc["rule"])  # fix: grc
-                groups_cost += constraint_function(sched, grc["weight"])
+                groups_cost += getattr(self.constraint_obj, grc["rule"])(
+                    sched, grc["weight"])
 
-        # fix: normalise outside the loop, guard against empty
         if group_schedules: groups_cost /= len(group_schedules)
         if prof_schedules:  profs_cost  /= len(prof_schedules)
 
         return 0.6 * groups_cost + 0.4 * profs_cost + add_cost
 
-    def evaluate_csp(self, state):
+    def evaluate_csp(self, state, fast=True):
+        """
+        Count hard constraint violations.
+        fast=True (default): return as soon as ANY violation is found (returns 1).
+        fast=False: count all violations across every constraint (used for reporting).
+        """
         slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = \
             self.constraint_obj._build_lookup_tables(state)
         c = self.constraint_obj
@@ -823,8 +841,12 @@ class EnsiaProblem(Problem):
         }
         violations = 0
         for hc in self.hard_constraints_list:
-            if isinstance(hc, str): continue
-            fn   = getattr(c, hc["rule"])
-            args = category_args[hc["category"]]
-            violations += fn(*args, count=True)  # here were we fixed and the explanation is gonna be in report 
+            if isinstance(hc, str):
+                continue
+            fn = getattr(c, hc["rule"])
+            v  = fn(*category_args[hc["category"]], count=True)
+            violations += v
+            # Short-circuit: no need to check remaining constraints
+            if fast and violations > 0:
+                return violations
         return violations
