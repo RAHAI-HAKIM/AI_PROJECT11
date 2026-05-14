@@ -19,6 +19,7 @@ class EnsiaProblem(Problem):
         self.rooms = data[0]
         self.events = data[3]
         self.groups = data[2]
+        self.teachers = data[5]
         # a table that stores the assignment of groups to section section_id => [group_id, group_id, ..]
         self.section_to_group = {section["id"] : [] for section in data[1]}
         for group in self.groups: self.section_to_group[group["section_id"]].append(group["id"])
@@ -26,6 +27,7 @@ class EnsiaProblem(Problem):
         self.events_by_id = {e["id"]: e for e in self.events}
         self.rooms_by_id  = {r["id"]:  r for r in self.rooms}
         self.groups_by_id  = {r["id"]:  r for r in self.groups}
+        self.teachers_by_id = {t["id"]: t for t in self.teachers}
 
         # fill the (room, time) tuple, assuming time is a number from 0-29
         slots = []
@@ -63,7 +65,7 @@ class EnsiaProblem(Problem):
             filename (str): Path to the data_sX.json file.
             
         Returns:
-            list: [rooms, sections, groups, events, constraints]
+            list: [rooms, sections, groups, events, constraints, teachers]
         """
 
         # Check if file exists to avoid crashes
@@ -74,13 +76,14 @@ class EnsiaProblem(Problem):
             raw_data = json.load(f)
         
         # Mapping dict keys to the specific list order expected by __init__
-        # data[0]=rooms, [1]=sections, [2]=groups, [3]=events, [4]=constraints
+        # data[0]=rooms, [1]=sections, [2]=groups, [3]=events, [4]=constraints, [5]=teachers
         return [
             raw_data.get("rooms", []),
             raw_data.get("sections", []),
             raw_data.get("groups", []),
             raw_data.get("activities", []),
-            raw_data.get("constraints", {})
+            raw_data.get("constraints", {}),
+            raw_data.get("teachers", [])
         ]
     
     # CSP Global
