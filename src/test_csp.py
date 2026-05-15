@@ -69,6 +69,8 @@ def prompt_groups(prob, state):
     while True:
         try:
             n = int(input(f"\nHow many group timetables would you like to view? ").strip())
+            if n == 0:
+                return None
             if n < 1:
                 print("Please enter a positive number.")
                 continue
@@ -94,6 +96,15 @@ def prompt_groups(prob, state):
     for group_name in chosen:
         print_student_timetable(state, prob, group_name)
 
+def get_param(prompt, default):
+    val = input(f"{prompt} (enter 'd' for default value ({default})): ").strip().lower()
+    if val == 'd' or val == '':
+        return default
+    try:
+        return type(default)(val)
+    except ValueError:
+        return default
+
 def select_algorithm():
     print("\nSelect an optimization algorithm:")
     print("  1. Simulated Annealing")
@@ -112,48 +123,36 @@ def select_algorithm():
             print("Invalid input. Please enter a valid integer.")
 
     if choice == 1:
-        return "sa", {}
+        temp = get_param("Enter initial temperature", 1000.0)
+        rate = get_param("Enter cooling rate", 0.95)
+        iters = get_param("Enter max iterations", 1000)
+        strat_choice = get_param("Select strategy (1: Linear, 2: Exponential)", 2)
+        strat = "Exponential" if strat_choice == 2 else "Linear"
+        return "sa", {"initial_temp": temp, "cooling_rate": rate, "max_iterations": iters, "strategy": strat}
 
     elif choice == 2:
         print("\nSelect Hill Climbing strategy:")
-        print("  1. Steepest")
-        print("  2. First Choice")
-        print("  3. Stochastic")
-        while True:
-            try:
-                sc = int(input("Enter your choice (1-3): ").strip())
-                if sc not in (1, 2, 3):
-                    print("Please enter a number between 1 and 3.")
-                    continue
-                break
-            except ValueError:
-                print("Invalid input. Please enter a valid integer.")
+        print("  1. Steepest\n  2. First Choice\n  3. Stochastic")
+        sc = get_param("Enter your choice (1-3)", 1)
         strategy_map = {1: "steepest", 2: "first_choice", 3: "stochastic"}
-        return "hc", {"strategy": strategy_map[sc]}
+        return "hc", {"strategy": strategy_map.get(sc, "steepest")}
 
     elif choice == 3:
         print("\nSelect base Hill Climbing strategy for Random Restart:")
-        print("  1. Steepest")
-        print("  2. First Choice")
-        print("  3. Stochastic")
-        while True:
-            try:
-                sc = int(input("Enter your choice (1-3): ").strip())
-                if sc not in (1, 2, 3):
-                    print("Please enter a number between 1 and 3.")
-                    continue
-                break
-            except ValueError:
-                print("Invalid input. Please enter a valid integer.")
+        print("  1. Steepest\n  2. First Choice\n  3. Stochastic")
+        sc = get_param("Enter your choice (1-3)", 1)
+        restarts = get_param("Enter number of restarts", 50)
         strategy_map = {1: "steepest", 2: "first_choice", 3: "stochastic"}
-        return "rrhc", {"base_strategy": strategy_map[sc]}
+        return "rrhc", {"base_strategy": strategy_map.get(sc, "steepest"), "num_restarts": restarts}
 
     elif choice == 4:
-        return "tabu", {}
+        restarts = get_param("Enter number of restarts", 5)
+        iters = get_param("Enter iterations per restart", 300)
+        size = get_param("Enter tabu list size", 20)
+        return "tabu", {"restarts": restarts, "iters": iters, "tabu_size": size}
 
 def run_optimizer(prob, algo, kwargs):
     init_cost = prob.evaluate(prob.state)
-    print(f"Initial Cost: {init_cost:.2f}")
 
     algo_labels = {
         "sa": "Simulated Annealing",
@@ -164,24 +163,16 @@ def run_optimizer(prob, algo, kwargs):
     print(f"\nRunning Soft Constraints Optimization ({algo_labels[algo]})...")
 
     if algo == "sa":
-        opt_state, _ = Optimizer.Simulated_Annealing(
-            Optimizer, prob, objective="opt",
-            initial_temp=1000, cooling_rate=0.95, max_iterations=1000, strategy="Exponential"
-        )
+        opt_state, _ = Optimizer.Simulated_Annealing(Optimizer, prob, objective="opt", **kwargs)
     elif algo == "hc":
-        opt_state, _ = Optimizer.Hill_Climbing(
-            Optimizer, prob, objective="opt", **kwargs
-        )
+        opt_state, _ = Optimizer.Hill_Climbing(Optimizer, prob, objective="opt", **kwargs)
     elif algo == "rrhc":
-        opt_state, _ = Optimizer.Random_Restart_Hill_Climbing(
-            Optimizer, prob, objective="opt", **kwargs
-        )
+        opt_state, _ = Optimizer.Random_Restart_Hill_Climbing(Optimizer, prob, objective="opt", **kwargs)
     elif algo == "tabu":
-        opt_state, _ = Optimizer.Tabu_Search(
-            Optimizer, prob, objective="opt"
-        )
+        opt_state, _ = Optimizer.Tabu_Search(Optimizer, prob, objective="opt", **kwargs)
 
     final_cost = prob.evaluate(opt_state)
+    print(f"\nInitial Cost: {init_cost:.2f}")
     print(f"Final Cost: {final_cost:.2f}")
     print(f"Total Cost Improvement: {init_cost - final_cost:.2f}")
 
