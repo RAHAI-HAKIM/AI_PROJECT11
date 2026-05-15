@@ -316,7 +316,7 @@ class Optimizer:
                         result=self.Hill_Climbing(problem,"opt","steepest",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
                     case "Hill Climbing First Choice":
                         result=self.Hill_Climbing(problem,"opt","first_choice",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
-                    case "Hill Climbing  Stochastic":
+                    case "Hill Climbing Stochastic":
                         result=self.Hill_Climbing(problem,"opt","stochastic",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
                     case "Simulated Annealing Exponential":
                         result=self.Simulated_Annealing(problem, "opt", 1000, 0.95, iterations,strategy="Exponential",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
@@ -416,7 +416,7 @@ class Optimizer:
         y_all = np.concatenate([y1, y2, y3, y4, y5,y6])
         ax.plot(y1, label="Hill Climbing Steepest")
         ax.plot(y2, label="Hill Climbing First Choice")
-        ax.plot(y3, label="Hill Climbing  Stochastic")
+        ax.plot(y3, label="Hill Climbing Stochastic")
         ax.plot(y4, label="Simulated Annealing Exponential")
         ax.plot(y5, label="Simulated Annealing Linear")
         ax.plot(y6, label="Tabu")
