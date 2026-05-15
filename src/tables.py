@@ -38,7 +38,7 @@ class Tables:
         problem = self.problem
         tables = {group["name"]: [[None]*5 for _ in range(6)] for group in problem.groups}
         
-        for eid, slot, in self.state.items():
+        for eid, slot in self.state.items():
             event = problem.events_by_id[eid]
             room = problem.rooms_by_id[slot[0]]
             teacher = problem.teachers_by_id[event["teacher_id"]]

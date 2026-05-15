@@ -4,8 +4,7 @@ from collections import deque
 import streamlit as st
 import pandas as pd
 import numpy as np
-import time
-from problem import *
+from problem import EnsiaProblem
 import matplotlib.pyplot as plt
 import matplotlib
 
@@ -251,6 +250,7 @@ class Optimizer:
             return global_best, global_best_val,data
 
         return global_best, global_best_val
+    
     def random_restart(self,problem,search,restarts,iterations):
         
         st.set_page_config(layout="wide")
@@ -274,16 +274,13 @@ class Optimizer:
                 st.subheader("Current Run")
                 running_chart1 = st.empty()
                 running_info1 = st.empty()
-            data = pd.DataFrame(
-                    np.random.randn(0, 1),
-                    columns=["Score"]
-                )
+
             match search:
                     case "Hill Climbing Steepest":
                         result=self.Hill_Climbing(problem,"opt","steepest",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
                     case "Hill Climbing First Choice":
                         result=self.Hill_Climbing(problem,"opt","first_choice",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
-                    case "Hill Climbing  Stochastic":
+                    case "Hill Climbing Stochastic":
                         result=self.Hill_Climbing(problem,"opt","stochastic",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
                     case "Simulated Annealing Exponential":
                         result=self.Simulated_Annealing(problem, "opt", 1000, 0.95, iterations,strategy="Exponential",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
@@ -294,11 +291,8 @@ class Optimizer:
 
             best_data = result[2].copy()
             best_state=result[0].copy()
-
-
-
-
             return (best_data,best_state)
+        
         # -----------------------------
         # LIVE MODE (2 CHARTS)
         # -----------------------------
@@ -317,12 +311,6 @@ class Optimizer:
                 best_info = st.empty()
         
             for run in range(TOTAL_RUNS):
-        
-                # Initial random data
-                data = pd.DataFrame(
-                    np.random.randn(0, 1),
-                    columns=["Score"]
-                )
                 match search:
                     case "Hill Climbing Steepest":
                         result=self.Hill_Climbing(problem,"opt","steepest",visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
@@ -337,9 +325,7 @@ class Optimizer:
                     case "Tabu":
                         result=self.Tabu_Search(problem, objective="opt", restarts=1, iters=iterations, tabu_size=30,visualize=True,col=col1,running_chart=running_chart1,running_info=running_info1)
                     # Keep best chart visible
-           
-    
-        
+
                 # Final score of this run
                 final_score = result[1]
         
@@ -380,51 +366,52 @@ class Optimizer:
         )
         return (best_data,best_state)
     
-    def compare(self, restart, it):
+    def compare(self, problem, restarts, iterations):
             
         y1 = self.random_restart(
-            problem=EnsiaProblem("../dataset/data_s2.json", "local_search"),
+            problem=problem,
             search="Hill Climbing Steepest",
-            restarts=restart,
-            iterations=it
+            restarts=restarts,
+            iterations=iterations
         )[0]
         y2 = self.random_restart(
-            problem=EnsiaProblem("../dataset/data_s2.json", "local_search"),
+            problem=problem,
             search="Hill Climbing First Choice",
-            restarts=restart,
-            iterations=it
+            restarts=restarts,
+            iterations=iterations
         )[0]
         y3 = self.random_restart(
-            problem=EnsiaProblem("../dataset/data_s2.json", "local_search"),
-            search="Hill Climbing  Stochastic",
-            restarts=restart,
-            iterations=it
+            problem=problem,
+            search="Hill Climbing Stochastic",
+            restarts=restarts,
+            iterations=iterations
         )[0]
         y4 = self.random_restart(
-            problem=EnsiaProblem("../dataset/data_s2.json", "local_search"),
+            problem=problem,
             search="Simulated Annealing Exponential",
-            restarts=restart,
-            iterations=it
+            restarts=restarts,
+            iterations=iterations
         )[0]
         y5 = self.random_restart(
-            problem=EnsiaProblem("../dataset/data_s2.json", "local_search"),
+            problem=problem,
             search="Simulated Annealing Linear",
-            restarts=restart,
-            iterations=it
-        ) [0]
-        
-        y6 = self.random_restart(
-            problem=EnsiaProblem("../dataset/data_s2.json", "local_search"),
-            search="Tabu",
-            restarts=restart,
-            iterations=it
+            restarts=restarts,
+            iterations=iterations
         )[0]
+        y6 = self.random_restart(
+            problem=problem,
+            search="Tabu",
+            restarts=restarts,
+            iterations=iterations
+        )[0]
+        
         y1 = y1["Cost"].values
         y2 = y2["Cost"].values
         y3 = y3["Cost"].values
         y4 = y4["Cost"].values
         y5 = y5["Cost"].values
         y6 = y6["Cost"].values
+        
         fig, ax = plt.subplots(figsize=(10, 4))
         y_all = np.concatenate([y1, y2, y3, y4, y5,y6])
         ax.plot(y1, label="Hill Climbing Steepest")
