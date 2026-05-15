@@ -254,7 +254,7 @@ class EnsiaProblem(Problem):
 
         return removals
 
-    def _bt(self, unassigned_set, state, neighbours):
+    def _backtrack(self, unassigned_set, state, neighbours):
         """
         Executes a recursive backtracking search to assign rooms and time slots to all events.
         Uses Minimum Remaining Values (MRV) to pick the next event and Forward Checking to 
@@ -308,7 +308,7 @@ class EnsiaProblem(Problem):
                 for n, rm in removals.items():
                     self._domains[n] -= rm
 
-                result = self._bt(unassigned_set, state, neighbours)
+                result = self._backtrack(unassigned_set, state, neighbours)
                 if result is not None:
                     return result
 
@@ -389,7 +389,7 @@ class EnsiaProblem(Problem):
             unassigned = set(eids)
             sub_state  = {}
 
-            result = self._bt(unassigned, sub_state, neighbours)
+            result = self._backtrack(unassigned, sub_state, neighbours)
             if result is None:
                 raise RuntimeError(
                     f"No valid schedule found for year {year} — constraints may be too tight."
@@ -478,7 +478,7 @@ class EnsiaProblem(Problem):
         return {event["id"]: slot for event, slot in zip(self.events, shuffled_slots)}
 
     # by the generator function for next states
-    def swapper_napper(self,state,iteration=10):
+    def swap_events_operator(self,state,iteration=10):
         """
             given a state , returns a state there the some keys and there values are swapped
             only used for testing purposes for now.
@@ -501,7 +501,7 @@ class EnsiaProblem(Problem):
 
         return temp_state
 
-    def shifter_nifter(self, state, iteration=10, direction="left", amount=1):
+    def shift_events_operator(self, state, iteration=10, direction="left", amount=1):
         if direction not in ["left", "right"]:
             return state
 
@@ -541,7 +541,7 @@ class EnsiaProblem(Problem):
 
         return state # Return original if no valid shifts were found
 
-    def move_to_another_slot(self,state,iteration=10):
+    def relocate_event_operator(self,state,iteration=10):
         """
             Returns another state where some events have there slots changed completly
         """
@@ -595,10 +595,10 @@ class EnsiaProblem(Problem):
         for _ in range(size):
             n = state.copy()
 
-            n = self.move_to_another_slot(n, iteration=10)
-            n = self.swapper_napper(n, iteration=5)
-            n = self.shifter_nifter(n, iteration=10, direction="left", amount=4)
-            n = self.shifter_nifter(n, iteration=10, direction="right", amount=4)
+            n = self.relocate_event_operator(n, iteration=10)
+            n = self.swap_events_operator(n, iteration=5)
+            n = self.shift_events_operator(n, iteration=10, direction="left", amount=4)
+            n = self.shift_events_operator(n, iteration=10, direction="right", amount=4)
 
             neighbors.append(n)
 
