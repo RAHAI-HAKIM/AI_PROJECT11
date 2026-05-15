@@ -64,17 +64,24 @@ show_table(csp_tables[f"{year}_{group}"])
 
 st.sidebar.divider()
 st.sidebar.header("Now optimize the solution with Local Search")
-local_search_method = st.sidebar.selectbox("Select Local Search Method", ["Simulated Annealing", "Hill Climbing", "Tabu Search"])
+local_search_method = st.sidebar.selectbox("Select Local Search Method", ["Simulated Annealing", "Hill Climbing", "Tabu Search", "All"])
 local_search_iterations = st.sidebar.number_input("Number of Iterations", min_value=1, max_value=1000)
 local_search_restarts = st.sidebar.select_slider("Number of Restarts", range(1, 11))
-local_search_button = st.sidebar.button("Optimize Solution")
+local_search_button = st.sidebar.button("Compare" if local_search_method == "All" else "Optimize Solution")
 
 if local_search_button:
     with st.sidebar.spinner("Optimizing solution..."):
-        state = optimizer.random_restart(problem=problem, method=local_search_method, iterations=local_search_iterations, restarts=local_search_restarts)
-        st.session_state.local_search_tables = Tables(problem, state)
-elif "local_search_tables" not in st.session_state:
-    st.stop()
+        if local_search_method == "All":
+            optimizer.compare(problem=problem, iterations=local_search_iterations, restarts=local_search_restarts)
+            if "local_search_tables" in st.session_state:
+                st.session_state.local_search_tables = None
+        else:
+            state = optimizer.random_restart(problem=problem, method=local_search_method, iterations=local_search_iterations, restarts=local_search_restarts)
+            st.session_state.local_search_tables = Tables(problem, state)
 
-local_search_tables = st.session_state.local_search_tables
-show_table(local_search_tables[f"{year}_{group}"])
+if "local_search_tables" in st.session_state and st.session_state.local_search_tables is not None:
+    st.header("Optimized Solution")
+    local_search_tables = st.session_state.local_search_tables
+    year = st.selectbox("Select Year", list(groups_in_year.keys()))
+    group = st.selectbox("Select Group", groups_in_year[year])
+    show_table(local_search_tables[f"{year}_{group}"])
