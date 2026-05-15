@@ -12,22 +12,9 @@ th, td {{ width: {100 / 7}% !important; white-space: normal !important; }}
 </style>
 """
 st.markdown(css, unsafe_allow_html=True)
-st.title("AI Project 11")
-
-st.header("Finding a valid state with csp")
 
 
-@st.cache_data
-def load_tables(method) -> Tables:
-    prb = EnsiaProblem("../dataset/data_s2.json", method)
-    # opt = Optimizer()
-    # state, ev = opt.Hill_Climbing(prb, strategy="stochastic")
-    state = prb.state
-    tables = Tables(prb, state)
-    return tables
-
-
-def show_table(tables, group_name):
+def show_table(time_table):
     timeslots = [
         "08:30 - 10:00",
         "10:10 - 11:40",
@@ -37,19 +24,57 @@ def show_table(tables, group_name):
         "16:50 - 18:20",
     ]
     week_days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"]
-    time_table = tables[group_name]
     data = dict(zip(timeslots, time_table))
     df = pd.DataFrame(data, index=week_days)
     st.table(df)
 
 
-tables = load_tables("global_search").tables
-group_names = list(tables.keys())
-year = st.selectbox(
-    "Select a year:", [1, 2, 3, 4, 5], format_func=lambda x: f"Year {x}"
-)
-group = st.selectbox(
-    "Select a group:", [i for i in range(1, 13)], format_func=lambda x: f"Group {x}"
-)
-group_name = f"Y{year}_G{group}"
-show_table(tables, group_name)
+st.title("AI Project 11")
+
+st.sidebar.header("Start by Generating a Valid CSP Solution")
+csp_button = st.sidebar.button("Solve CSP", type="primary")
+
+if csp_button:
+    with st.sidebar.spinner("Generating a valid CSP solution..."):
+        st.session_state.problem = EnsiaProblem("../dataset/data_s2.json")
+        st.session_state.csp_tables = Tables(st.session_state.problem)
+        st.session_state.optimizer = Optimizer()
+elif "problem" not in st.session_state:
+    st.stop()
+
+problem = st.session_state.problem
+csp_tables = st.session_state.csp_tables
+optimizer = st.session_state.optimizer
+
+if "groups" not in st.session_state:
+    groups_in_year = {}
+    for group in csp_tables.tables:
+        year, group = group.split("_")
+        if year not in groups_in_year:
+            groups_in_year[year] = []
+        groups_in_year[year].append(group)
+    st.session_state.groups = groups_in_year
+else:
+    groups_in_year = st.session_state.groups
+
+st.header("Solution using Global Search CSP")
+year = st.selectbox("Select Year", list(groups_in_year.keys()))
+group = st.selectbox("Select Group", groups_in_year[year])
+show_table(csp_tables[f"{year}_{group}"])
+
+st.sidebar.divider()
+st.sidebar.header("Now optimize the solution with Local Search")
+local_search_method = st.sidebar.selectbox("Select Local Search Method", ["Simulated Annealing", "Hill Climbing", "Tabu Search"])
+local_search_iterations = st.sidebar.number_input("Number of Iterations", min_value=1, max_value=1000)
+local_search_restarts = st.sidebar.select_slider("Number of Restarts", range(1, 11))
+local_search_button = st.sidebar.button("Optimize Solution")
+
+if local_search_button:
+    with st.sidebar.spinner("Optimizing solution..."):
+        state = optimizer.random_restart(problem=problem, method=local_search_method, iterations=local_search_iterations, restarts=local_search_restarts)
+        st.session_state.local_search_tables = Tables(problem, state)
+elif "local_search_tables" not in st.session_state:
+    st.stop()
+
+local_search_tables = st.session_state.local_search_tables
+show_table(local_search_tables[f"{year}_{group}"])
