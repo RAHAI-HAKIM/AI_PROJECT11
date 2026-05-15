@@ -388,6 +388,21 @@ class EnsiaProblem(Problem):
             if self.busy_rooms:
                 for eid in eids:
                     self._domains[eid] -= self.busy_rooms
+            
+            # FIX: Prune busy teachers and groups across different years
+            for eid in eids:
+                e = self.events_by_id[eid]
+                teacher_id = e["teacher_id"]
+                groups = self._get_event_groups(e)
+                
+                invalid_slots = set()
+                for roomid, slot in self._domains[eid]:
+                    if (teacher_id, slot) in self.busy_teachers:
+                        invalid_slots.add((roomid, slot))
+                    elif any((gid, slot) in self.busy_groups for gid in groups):
+                        invalid_slots.add((roomid, slot))
+                        
+                self._domains[eid] -= invalid_slots
 
             unassigned = set(eids)
             sub_state  = {}
@@ -407,25 +422,10 @@ class EnsiaProblem(Problem):
 
         return full_state
 
-    def is_consistent(self, state, is_complete=False):
+    def is_consistent(self, state, is_complete=True):
         """
         Validates the current state against hard constraints.
-
-        During backtracking (is_complete=False), rules already enforced by
-        forward-checking are skipped for efficiency, they cannot be violated
-        because the domain pruner prevents it.
-
-        When called on the "final" complete schedule (is_complete=True), every
-        hard constraint is re-evaluated for safety. This catches anything
-        that forward-checking might have missed (e.g. cross-year room conflicts
-        that were outside the per-year neighbour graph).
-
-        Args:
-            state (dict): The current schedule mapping event_ids to (room, slot).
-            is_complete (bool): True iff every event has been assigned.
-
-        Returns:
-            bool: True if no hard constraint is violated, False otherwise.
+        Now strictly enforces all rules to prevent overlapping "missing" events.
         """
         slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = \
             self.constraint_obj._build_lookup_tables(state)
@@ -439,26 +439,11 @@ class EnsiaProblem(Problem):
             "teacher_based":    (teacher_events,),
         }
 
-        forward_checked_rules = [
-            "NO_ROOM_DOUBLE_BOOKING",
-            "NO_GROUP_DOUBLE_BOOKING",
-            "NO_TEACHER_DOUBLE_BOOKING",
-            "ROOM_CAPACITY_GEQ_HEADCOUNT",
-            "MATCH_ROOM_TYPE",
-            "CONSECUTIVE_SECTION_LECTURES",
-            "SEPARATE_LECTURE_PRACTICE",
-            "MAX_CONSECUTIVE_STUDENT_SLOTS_3",
-        ]
-
         for hc in self.hard_constraints_list:
             if isinstance(hc, str):
                 continue
 
             rule = hc["rule"]
-
-            if not is_complete and rule in forward_checked_rules:
-                continue
-
             fn   = getattr(c, rule)
             args = category_args[hc["category"]]
             if not fn(*args, count=False):
@@ -609,13 +594,7 @@ class EnsiaProblem(Problem):
     def _relocate(self, state, n):
         """
         Relocates n events to different slots
-        Args:
-            state: The current state
-            n: The number of events to relocate
-        Returns:
-            dict: The updated state
         """
-        
         event_sample = random.sample(list(state.keys()), k=n)
         used_slots = set(state.values())
         empty_slots = [s for s in self.slots if s not in used_slots]
@@ -624,14 +603,18 @@ class EnsiaProblem(Problem):
         for event in event_sample:
             old_slot = state_copy[event]
             random.shuffle(empty_slots)
+            assigned = False
+            
             for slot in empty_slots:
                 state_copy[event] = slot
                 if self.is_consistent(state_copy):
+                    empty_slots.remove(slot)
+                    empty_slots.append(old_slot)
+                    assigned = True
                     break
-            state_copy[event] = random.choice(empty_slots)
-
-            empty_slots.append(old_slot)
-            empty_slots.remove(state_copy[event])
+                    
+            if not assigned:
+                state_copy[event] = old_slot # Revert if no valid slot found
 
         return state_copy
 
@@ -642,8 +625,8 @@ class EnsiaProblem(Problem):
         neighbors = []
         for _ in range(size):
             next_state = self._relocate(state, n)
-            next_state = self.shift_events_operator(next_state, iteration=10, direction="left", amount=4)
-            next_state = self.shift_events_operator(next_state, iteration=10, direction="right", amount=4)
+            # next_state = self.shift_events_operator(next_state, iteration=10, direction="left", amount=4)
+            # next_state = self.shift_events_operator(next_state, iteration=10, direction="right", amount=4)
             neighbors.append(next_state)
         return neighbors
 
@@ -651,7 +634,7 @@ class EnsiaProblem(Problem):
         """
             Uses the pipeline to generate a single neighbor
         """
-        return self.pipeline_generate_neighbors(self.generate_neighbors_csp(state)[0],size=1)[0]
+        return self.generate_neighbors(state, size=1)[0]
 
     def generate_neighbors_csp(self, state, size=50):
         neighbors = []
