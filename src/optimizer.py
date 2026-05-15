@@ -162,7 +162,7 @@ class Optimizer:
         global_best_eval = float('inf')
         for every in range(num_restarts):
             problem.state = problem.generate_random_state()
-            result_state, result_eval = self.Hill_Climbing(problem, objective=objective,strategy=base_strategy)
+            result_state, result_eval = self.Hill_Climbing(Optimizer,problem, objective=objective,strategy=base_strategy)
 
             if result_eval < global_best_eval:
                 global_best_state = result_state

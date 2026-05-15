@@ -27,7 +27,7 @@ class EnsiaProblem(Problem):
         self.events_by_id = {e["id"]: e for e in self.events}
         self.rooms_by_id  = {r["id"]:  r for r in self.rooms}
         self.groups_by_id  = {r["id"]:  r for r in self.groups}
-        self.teachers_by_id = {t["id"]: t for t in self.teachers}
+        self.teachers_by_id = {t["id"]:  t for t in self.teachers}
 
         # fill the (room, time) tuple, assuming time is a number from 0-29
         slots = []
@@ -72,7 +72,7 @@ class EnsiaProblem(Problem):
             filename (str): Path to the data_sX.json file.
             
         Returns:
-            list: [rooms, sections, groups, events, constraints, teachers]
+            list: [rooms, sections, groups, events, constraints]
         """
 
         # Check if file exists to avoid crashes
@@ -83,14 +83,14 @@ class EnsiaProblem(Problem):
             raw_data = json.load(f)
         
         # Mapping dict keys to the specific list order expected by __init__
-        # data[0]=rooms, [1]=sections, [2]=groups, [3]=events, [4]=constraints, [5]=teachers
+        # data[0]=rooms, [1]=sections, [2]=groups, [3]=events, [4]=constraints
         return [
             raw_data.get("rooms", []),
             raw_data.get("sections", []),
             raw_data.get("groups", []),
             raw_data.get("activities", []),
             raw_data.get("constraints", {}),
-            raw_data.get("teachers", [])
+            raw_data.get("teachers", {})
         ]
     
     # CSP Global
@@ -598,8 +598,6 @@ class EnsiaProblem(Problem):
         for _ in range(size):
             n = state.copy()
 
-            n = self.relocate_event_operator(n, iteration=10)
-            n = self.swap_events_operator(n, iteration=5)
             n = self.shift_events_operator(n, iteration=10, direction="left", amount=4)
             n = self.shift_events_operator(n, iteration=10, direction="right", amount=4)
 
@@ -607,17 +605,53 @@ class EnsiaProblem(Problem):
 
         return neighbors
 
-    def generate_neighbors(self, state, size=50):
+    
+    def _relocate(self, state, n):
         """
-            Uses the pipeline generator to generate n neighbors
+        Relocates n events to different slots
+        Args:
+            state: The current state
+            n: The number of events to relocate
+        Returns:
+            dict: The updated state
         """
-        return self.pipeline_generate_neighbors(state,size=size)
+        
+        event_sample = random.sample(list(state.keys()), k=n)
+        used_slots = set(state.values())
+        empty_slots = [s for s in self.slots if s not in used_slots]
+        state_copy = state.copy()
+        
+        for event in event_sample:
+            old_slot = state_copy[event]
+            random.shuffle(empty_slots)
+            for slot in empty_slots:
+                state_copy[event] = slot
+                if self.is_consistent(state_copy):
+                    break
+            state_copy[event] = random.choice(empty_slots)
+
+            empty_slots.append(old_slot)
+            empty_slots.remove(state_copy[event])
+
+        return state_copy
+
+    def generate_neighbors(self, state, size, n=5):
+        """
+        Return a list of size neighbors, each with n events relocated
+        """
+        neighbors = []
+        for _ in range(size):
+            next_state = self._relocate(state, n)
+            next_state = self.shift_events_operator(next_state, iteration=10, direction="left", amount=4)
+            next_state = self.shift_events_operator(next_state, iteration=10, direction="right", amount=4)
+            neighbors.append(next_state)
+        return neighbors
 
     def move_operator(self, state):
         """
             Uses the pipeline to generate a single neighbor
         """
-        return self.pipeline_generate_neighbors(state,size=1)[0]
+        return self.pipeline_generate_neighbors(self.generate_neighbors_csp(state)[0],size=1)[0]
 
     def generate_neighbors_csp(self, state, size=50):
         neighbors = []
