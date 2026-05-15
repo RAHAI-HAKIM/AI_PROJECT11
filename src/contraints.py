@@ -1,4 +1,3 @@
-
 class Constraints:
     # includes the constraints functions, seperated for clean structure
     def __init__(self, problem):
@@ -180,20 +179,20 @@ class Constraints:
             int | bool: The number of violations, or a boolean indicating validity.
         """
         from collections import defaultdict
-        course_slots = defaultdict(list)
+        course_sec_slots = defaultdict(list)
         for event_id, (roomid, slot) in state.items():
             event = self.problem.events_by_id[event_id]
             if event["type_id"] == 1:
-                course_slots[event["course_name"]].append(slot)
+                course_sec_slots[(event["course_name"], event["target_id"])].append(slot)
 
         violations = 0
-        for course, slots in course_slots.items():
+        for course_sec, slots in course_sec_slots.items():
             if len(slots) < 2: continue
-            for i in range(len(slots)):
-                for j in range(i + 1, len(slots)):
-                    if not ((slots[i] // 6) == (slots[j] // 6) and abs(slots[i] - slots[j]) == 1):
-                        if not count: return False
-                        violations += 1
+            slots.sort()
+            for i in range(len(slots) - 1):
+                if not ((slots[i] // 6) == (slots[i+1] // 6) and abs(slots[i] - slots[i+1]) == 1):
+                    if not count: return False
+                    violations += 1
         return violations if count else True
 
     def MAX_CONSECUTIVE_STUDENT_SLOTS_3(self, state, count=True):

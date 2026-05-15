@@ -112,12 +112,10 @@ class Optimizer:
         First restart starts from problem.state, subsequent ones use a density-guided random state
         that is biased toward slots that performed well in previous restarts.
         """
-        global_best_state = None
+        global_best_state = problem.state.copy()
         global_best_eval = float('inf')
-        for every in range(num_restarts):
-            problem.state = problem.generate_random_state()
+        for _ in range(num_restarts):
             result_state, result_eval = self.Hill_Climbing(Optimizer,problem, objective=objective,strategy=base_strategy)
-
             if result_eval < global_best_eval:
                 global_best_state = result_state
                 global_best_eval = result_eval
