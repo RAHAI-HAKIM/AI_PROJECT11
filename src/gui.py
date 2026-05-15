@@ -35,10 +35,11 @@ st.sidebar.header("Start by Generating a Valid CSP Solution")
 csp_button = st.sidebar.button("Solve CSP", type="primary")
 
 if csp_button:
-    with st.sidebar.spinner("Generating a valid CSP solution..."):
-        st.session_state.problem = EnsiaProblem("../dataset/data_s2.json")
-        st.session_state.csp_tables = Tables(st.session_state.problem)
-        st.session_state.optimizer = Optimizer()
+    with st.sidebar:
+        with st.spinner("Generating a valid CSP solution..."):
+            st.session_state.problem = EnsiaProblem("../dataset/data_s2.json")
+            st.session_state.csp_tables = Tables(st.session_state.problem)
+            st.session_state.optimizer = Optimizer()
 elif "problem" not in st.session_state:
     st.stop()
 
@@ -85,24 +86,25 @@ local_search_button = st.sidebar.button(
 )
 
 if local_search_button:
-    with st.sidebar.spinner("Optimizing solution..."):
-        if local_search_method == "All":
-            optimizer.compare(
-                problem=problem,
-                iterations=local_search_iterations,
-                restarts=local_search_restarts,
-            )
-            st.session_state.mode = "all"
-        else:
-            st.session_state.local_search_data, st.session_state.local_search_state = optimizer.random_restart(
-                problem=problem,
-                search=local_search_method,
-                iterations=local_search_iterations,
-                restarts=local_search_restarts,
-            )
-            st.session_state.local_search_tables = Tables(problem, st.session_state.local_search_state)
-            st.session_state.mode = "single"
-            st.rerun()
+    with st.sidebar:
+        with st.spinner("Optimizing solution..."):
+            if local_search_method == "All":
+                optimizer.compare(
+                    problem=problem,
+                    iterations=local_search_iterations,
+                    restarts=local_search_restarts,
+                )
+                st.session_state.mode = "all"
+            else:
+                st.session_state.local_search_data, st.session_state.local_search_state = optimizer.random_restart(
+                    problem=problem,
+                    search=local_search_method,
+                    iterations=local_search_iterations,
+                    restarts=local_search_restarts,
+                )
+                st.session_state.local_search_tables = Tables(problem, st.session_state.local_search_state)
+                st.session_state.mode = "single"
+                st.rerun()
 
 if "mode" not in st.session_state:
     st.stop()
