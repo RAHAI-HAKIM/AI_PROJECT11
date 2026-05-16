@@ -211,6 +211,34 @@ class Constraints:
             room_data = self.problem.rooms_by_id[roomid]
             wasted += (room_data["capacity"] - event_data["headcount"]) / room_data["capacity"] # take the percentage wasted 
         return wasted * weight
+    
+    def SEPARATE_LECTURE_PRACTICE(self, state, weight):
+        """
+        Prevents scheduling a lecture and a practice session for the same course and group on the same day.
+
+        Args:
+            state (dict): The current schedule assignment.
+            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+
+        Returns:
+            int | bool: The number of violations, or a boolean indicating validity.
+        """
+        from collections import defaultdict
+        key_to_types = defaultdict(list)
+        for event_id, (roomid, slot) in state.items():
+            event = self.problem.events_by_id[event_id]
+            day   = slot // 6
+            groups = (self.problem.section_to_group[event["target_id"]]
+                    if event["type_id"] == 1 else [event["target_id"]])
+            for gid in groups:
+                key_to_types[(gid, event["course_name"], day)].append(event["type_id"])
+
+        violations = 0
+        for (gid, course, day), types in key_to_types.items():
+            if any(t == 1 for t in types) and any(t != 1 for t in types):
+                if not count: return False
+                violations += 1
+        return violations * weight
 
     # general constraints
     def MORNING_LECTURES(self, event, roomid, slot, weight):
@@ -290,5 +318,6 @@ class Constraints:
         num_sessions = sum(len(day) for day in days_active.values())
         if num_days < num_sessions // 3: return 0
         return weight * (num_days + 1 - (num_sessions // 3)) # the penalty increases with every additional day
+
 
 

@@ -7002,6 +7002,11 @@
                 "rule": "MINIMIZE_WASTED_SEATS",
                 "category": "external",
                 "weight": 1.0
+            },
+            {
+                "rule": "SEPARATE_LECTURE_PRACTICE",
+                "category": "external",
+                "weight": 1.5
             }
         ]
     }
