@@ -423,3 +423,57 @@ class Optimizer:
 
         # st.pyplot(fig)
         return fig
+
+
+    def compare_algorithms(self, problem, iterations=300):
+        """
+        runs all algorithms and plots their cost reduction over time using matplotlib,
+        bypassing the streamlit ui elements for a clean notebook output.
+        """
+        import matplotlib.pyplot as plt
+        
+        # A mock class to silently absorb Streamlit UI calls during the run
+        class DummyUI:
+            def line_chart(self, *args, **kwargs): pass
+            def metric(self, *args, **kwargs): pass
+            
+        dummy = DummyUI()
+        
+        algorithms = [
+            "Hill Climbing Steepest", 
+            "Hill Climbing First Choice",
+            "Hill Climbing Stochastic", 
+            "Simulated Annealing Exponential",
+            "Simulated Annealing Linear", 
+            "Tabu"
+        ]
+        
+        results_data = {}
+        
+        for algo in algorithms:
+            print(f"Running {algo}...")
+            result = self._run_algorithm(
+                search=algo, 
+                problem=problem, 
+                iterations=iterations, 
+                col=None, 
+                chart=dummy, 
+                info=dummy
+            )
+            results_data[algo] = result[2] 
+            
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        for algo, data in results_data.items():
+            if data is not None and not data.empty:
+                ax.plot(data["Cost"].values, label=algo, linewidth=2)
+            
+        ax.set_title("Algorithm Performance Comparison", fontsize=14, fontweight='bold')
+        ax.set_xlabel("Recorded Updates (Note: X-axis scaling varies slightly by algorithm)", fontsize=12)
+        ax.set_ylabel("Cost Score (Lower is Better)", fontsize=12)
+        
+        ax.grid(True, linestyle='--', alpha=0.6)
+        ax.legend(title="Algorithms", loc="upper right")
+        
+        plt.tight_layout()
+        plt.show()
