@@ -2,37 +2,38 @@ import time
 from problem import EnsiaProblem
 from optimizer import Optimizer
 
+
 def print_student_timetable(state, prob, group_name="Y1_G1"):
     print(f"\nTimetable for Group: {group_name}")
     print("-" * 139)
-     
+
     days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"]
     grid = [["" for _ in range(6)] for _ in range(5)]
-    
+
     target_group = next((g['id'] for g in prob.groups if g['name'] == group_name), 1)
-        
+
     for eid, (rid, slot) in state.items():
         event = prob.events_by_id[eid]
         is_lec = (event["type_id"] == 1)
-        
+
         attends = False
         if is_lec and target_group in prob.section_to_group[event["target_id"]]:
             attends = True
         elif not is_lec and event["target_id"] == target_group:
             attends = True
-                
+
         if attends:
             day = slot // 6
             time_idx = slot % 6
             abbrev = event['name'].split('_')[0]
-            
+
             type_name = "TP"
             if event["type_id"] == 1: type_name = "Lec"
             elif event["type_id"] == 2: type_name = "TD"
-                
+
             rname = prob.rooms_by_id[rid]['name'].replace("TUTORIAL", "TUTO").replace("AMPHI", "AMPHI").replace("CIRCUIT_LAB", "CIRC")
             if len(rname) > 7: rname = rname[:7]
-            
+
             grid[day][time_idx] = f"{abbrev} {type_name} {rname}"
 
     col_w = 18
@@ -40,20 +41,21 @@ def print_student_timetable(state, prob, group_name="Y1_G1"):
     header = f"{'Day':10} | " + " | ".join([f"{t:<{col_w}}" for t in times])
     print(header)
     print("-" * (13 + 6 * (col_w + 3)))
-    
+
     for i in range(5):
         row = [f"{days[i]:10}"] + [f"{cell:<{col_w}}" for cell in grid[i]]
         print(" | ".join(row))
     print("-" * (13 + 6 * (col_w + 3)))
 
+
 def violated_hard_constraints(prob, state):
     tbs = prob.constraint_obj._build_lookup_tables(state)
     category_args = {
-        'slot_to_rooms': (tbs[0],), 'slot_to_groups': (tbs[1],), 
-        'slot_to_teachers': (tbs[2],), 'state_based': (state,), 
+        'slot_to_rooms': (tbs[0],), 'slot_to_groups': (tbs[1],),
+        'slot_to_teachers': (tbs[2],), 'state_based': (state,),
         'teacher_based': (tbs[3],)
     }
-    
+
     violated = 0
     for hc in prob.hard_constraints_list:
         if isinstance(hc, str): continue
@@ -62,6 +64,7 @@ def violated_hard_constraints(prob, state):
         violated += res if isinstance(res, int) else (0 if res else 1)
 
     return violated
+
 
 def prompt_groups(prob, state):
     all_groups = {g['name'] for g in prob.groups}
@@ -96,6 +99,7 @@ def prompt_groups(prob, state):
     for group_name in chosen:
         print_student_timetable(state, prob, group_name)
 
+
 def get_param(prompt, default):
     val = input(f"{prompt} (enter 'd' for default value ({default})): ").strip().lower()
     if val == 'd' or val == '':
@@ -104,6 +108,7 @@ def get_param(prompt, default):
         return type(default)(val)
     except ValueError:
         return default
+
 
 def select_algorithm():
     print("\nSelect an optimization algorithm:")
@@ -125,7 +130,7 @@ def select_algorithm():
     if choice == 1:
         temp = get_param("Enter initial temperature", 200.0)
         rate = get_param("Enter cooling rate", 0.999)
-        iters = get_param("Enter max iterations", 2500) # make it 2000 if linear
+        iters = get_param("Enter max iterations", 2500)
         strat_choice = get_param("Select strategy (1: Linear, 2: Exponential)", 2)
         strat = "Exponential" if strat_choice == 2 else "Linear"
         return "sa", {"initial_temp": temp, "cooling_rate": rate, "max_iterations": iters, "strategy": strat}
@@ -151,6 +156,7 @@ def select_algorithm():
         size = get_param("Enter tabu list size", 50)
         return "tabu", {"restarts": restarts, "iters": iters, "tabu_size": size}
 
+
 def run_optimizer(prob, algo, kwargs):
     init_cost = prob.evaluate(prob.state)
 
@@ -171,7 +177,7 @@ def run_optimizer(prob, algo, kwargs):
         opt_state, _ = Optimizer.Random_Restart_Hill_Climbing(Optimizer, prob, objective="opt", **kwargs)
     elif algo == "tabu":
         opt_state, _ = Optimizer.Tabu_Search(Optimizer, prob, objective="opt", **kwargs)
-    
+
     elapsed = time.time() - t_opt_start
     print(f"\nOptimization completed in {elapsed:.2f} seconds.")
 
@@ -185,15 +191,23 @@ def run_optimizer(prob, algo, kwargs):
 
     return opt_state
 
-def main():
-    print("Loading Dataset and Running CSP Backtracking...")
-    t0 = time.time()
-    prob = EnsiaProblem("dataset/data_s2.json", cspmethod="global_search")
-    elapsed = time.time() - t0
-    
-    print(f"Solver completed in {elapsed:.2f} seconds.")
-    print(f"Total events scheduled: {len(prob.state)} / {len(prob.events)}")
-    
+
+def select_csp_method():
+    print("\nSelect CSP method:")
+    print("  1. Global Search (Backtracking with MRV + Forward Checking)")
+    print("  2. Local Search (Min-Conflicts)")
+
+    while True:
+        try:
+            choice = int(input("Enter your choice (1-2): ").strip())
+            if choice in (1, 2):
+                return "global_search" if choice == 1 else "local_search"
+            print("Please enter 1 or 2.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+
+def run_global(prob):
     violated = violated_hard_constraints(prob, prob.state)
     print(f"Violated hard constraints: {violated}")
 
@@ -203,6 +217,62 @@ def main():
     opt_state = run_optimizer(prob, algo, kwargs)
 
     prompt_groups(prob, opt_state)
+
+
+def run_local(prob):
+    init_violations = violated_hard_constraints(prob, prob.state)
+    print(f"Initial hard constraint violations: {init_violations}")
+
+    prompt_groups(prob, prob.state)
+
+    max_steps = get_param("\nEnter max steps for Min-Conflicts", 5000)
+
+    print(f"\nRunning Min-Conflicts Local Search (max_steps={max_steps})...")
+    t1 = time.time()
+    final_state = prob.min_conflicts(max_steps=max_steps)
+    elapsed = time.time() - t1
+
+    print(f"\nMin-Conflicts completed in {elapsed:.2f} seconds.")
+
+    final_violations = violated_hard_constraints(prob, final_state)
+    print(f"Initial hard constraint violations: {init_violations}")
+    print(f"Final hard constraint violations:   {final_violations}")
+    print(f"Total violation reduction: {init_violations - final_violations}")
+
+    if final_violations == 0:
+        print("\nFeasible schedule found! Running soft constraint optimization...")
+
+        prob.state = final_state
+        algo, kwargs = select_algorithm()
+        opt_state = run_optimizer(prob, algo, kwargs)
+
+        prompt_groups(prob, opt_state)
+    else:
+        print("\nNo fully feasible schedule found within the given steps.")
+        print("You can view the best partial solution found:")
+        prompt_groups(prob, final_state)
+
+
+def main():
+    csp_method = select_csp_method()
+
+    if csp_method == "global_search":
+        print("\nLoading Dataset and Running CSP Backtracking...")
+    else:
+        print("\nLoading Dataset and Generating Random State (Local Search CSP)...")
+
+    t0 = time.time()
+    prob = EnsiaProblem("dataset/data_s2.json", cspmethod=csp_method)
+    elapsed = time.time() - t0
+
+    print(f"Completed in {elapsed:.2f} seconds.")
+    print(f"Total events scheduled: {len(prob.state)} / {len(prob.events)}")
+
+    if csp_method == "global_search":
+        run_global(prob)
+    else:
+        run_local(prob)
+
 
 if __name__ == '__main__':
     main()
