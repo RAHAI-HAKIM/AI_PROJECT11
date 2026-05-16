@@ -36,7 +36,7 @@ csp_button = st.sidebar.button("Solve CSP", type="primary")
 
 if csp_button:
     with st.sidebar.spinner("Generating a valid CSP solution..."):
-        st.session_state.problem = EnsiaProblem("../dataset/data_s2.json")
+        st.session_state.problem = EnsiaProblem("dataset/data_s2.json")
         st.session_state.csp_tables = Tables(st.session_state.problem)
         st.session_state.optimizer = Optimizer()
 elif "problem" not in st.session_state:
