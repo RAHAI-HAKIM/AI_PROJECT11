@@ -665,7 +665,7 @@ class EnsiaProblem(Problem):
 
         return state_copy
 
-    def generate_neighbors(self, state, size=50):
+    def generate_neighbors(self, state, size=10):
         """
         Generates `size` neighbours for the opt objective (soft-constraint
         minimisation).  Delegates entirely to the pipeline.

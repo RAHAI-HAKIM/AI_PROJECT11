@@ -20,6 +20,7 @@ class Optimizer:
         Minimises evaluate() / evaluate_csp() via Simulated Annealing.
 
         """
+        if strategy != "Exponential": cooling_rate = initial_temp / max_iterations
         eval_func = problem.evaluate if objective == "opt" else problem.evaluate_csp
         get_next  = problem.move_operator if objective == "opt" else problem.move_operator_csp
 
@@ -98,7 +99,8 @@ class Optimizer:
         get_neighbors = (problem.generate_neighbors if objective == "opt"
                          else problem.generate_neighbors_csp)
 
-        NEIGHBOR_SIZE = 50
+        NEIGHBOR_SIZE = 35
+        NEIGHBOR_SIZE_STOCHASTIC = 35
         PLATEAU_LIMIT = 10
 
         current_state = dict(problem.state)
@@ -109,23 +111,24 @@ class Optimizer:
             data = pd.DataFrame(np.random.randn(0, 1), columns=["Cost"])
 
         while plateau_count < PLATEAU_LIMIT:
-            neighbors  = list(get_neighbors(current_state, size=NEIGHBOR_SIZE))
             next_state = None
 
             if strategy == "steepest":
-                # Fix 1: evaluate once, cache result
-                scored       = [(eval_func(n), n) for n in neighbors]
+                neighbors = list(get_neighbors(current_state, size=NEIGHBOR_SIZE))
+                scored = [(eval_func(n), n) for n in neighbors]
                 best_val, best_n = min(scored, key=lambda x: x[0])
                 if best_val < current_eval:
                     next_state = best_n
 
             elif strategy == "first_choice":
+                neighbors = list(get_neighbors(current_state, size=NEIGHBOR_SIZE))
                 for n in neighbors:
                     if eval_func(n) < current_eval:
                         next_state = n
                         break
 
             elif strategy == "stochastic":
+                neighbors = list(get_neighbors(current_state, size=NEIGHBOR_SIZE_STOCHASTIC))
                 improving = [n for n in neighbors if eval_func(n) < current_eval]
                 if improving:
                     next_state = random.choice(improving)
@@ -376,13 +379,13 @@ class Optimizer:
                 )
             case "Simulated Annealing Exponential":
                 return self.Simulated_Annealing(
-                    problem, "opt", 500, 0.99, iterations,
+                    problem, "opt", 200, 0.999, iterations,
                     strategy="Exponential",
                     visualize=True, col=col, running_chart=chart, running_info=info
                 )
             case "Simulated Annealing Linear":
                 return self.Simulated_Annealing(
-                    problem, "opt", 100, 100 / max(iterations, 1), iterations,
+                    problem, "opt", 200, 200 / max(iterations, 1), iterations,
                     strategy="Linear",
                     visualize=True, col=col, running_chart=chart, running_info=info
                 )

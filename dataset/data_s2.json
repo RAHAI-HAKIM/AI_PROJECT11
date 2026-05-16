@@ -6966,12 +6966,12 @@
             {
                 "rule": "MINIMIZE_GAPS",
                 "category": "group-prof",
-                "weight": 10.0
+                "weight": 9.0
             },
             {
                 "rule": "SIMILAR_ACTIVITIES",
                 "category": "external",
-                "weight": 8.0
+                "weight": 5.5
             },
             {
                 "rule": "MINIMIZE_TEACHER_DAYS",
@@ -6986,7 +6986,7 @@
             {
                 "rule": "MORNING_LECTURES",
                 "category": "general",
-                "weight": 4.0
+                "weight": 4.5
             },
             {
                 "rule": "AVOID_THURSDAY_AFTERNOON",

@@ -123,9 +123,9 @@ def select_algorithm():
             print("Invalid input. Please enter a valid integer.")
 
     if choice == 1:
-        temp = get_param("Enter initial temperature", 500.0)
-        rate = get_param("Enter cooling rate", 0.99)
-        iters = get_param("Enter max iterations", 1000)
+        temp = get_param("Enter initial temperature", 200.0)
+        rate = get_param("Enter cooling rate", 0.999)
+        iters = get_param("Enter max iterations", 2500) # make it 2000 if linear
         strat_choice = get_param("Select strategy (1: Linear, 2: Exponential)", 2)
         strat = "Exponential" if strat_choice == 2 else "Linear"
         return "sa", {"initial_temp": temp, "cooling_rate": rate, "max_iterations": iters, "strategy": strat}
@@ -146,9 +146,9 @@ def select_algorithm():
         return "rrhc", {"base_strategy": strategy_map.get(sc, "steepest"), "num_restarts": restarts}
 
     elif choice == 4:
-        restarts = get_param("Enter number of restarts", 5)
-        iters = get_param("Enter iterations per restart", 300)
-        size = get_param("Enter tabu list size", 20)
+        restarts = get_param("Enter number of restarts", 1)
+        iters = get_param("Enter iterations per restart", 1000)
+        size = get_param("Enter tabu list size", 50)
         return "tabu", {"restarts": restarts, "iters": iters, "tabu_size": size}
 
 def run_optimizer(prob, algo, kwargs):

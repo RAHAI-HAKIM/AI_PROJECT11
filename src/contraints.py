@@ -247,7 +247,7 @@ class Constraints:
         time = slot % 6
         if time == 0 or time == 1: return 0
         match time:
-            case 2: parameter = 1
+            case 2: parameter = 1.5
             case 3: parameter = 1.5
             case 4: parameter = 2
             case 5: parameter = 2.5

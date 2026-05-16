@@ -77,7 +77,7 @@ local_search_method = st.sidebar.selectbox(
     ]
 )
 local_search_iterations = st.sidebar.number_input(
-    "Number of Iterations", min_value=1, max_value=1000, value=100
+    "Number of Iterations", min_value=1, max_value=5000, value=100
 )
 local_search_restarts = st.sidebar.select_slider("Number of Restarts", range(1, 11))
 local_search_button = st.sidebar.button(
