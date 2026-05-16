@@ -52,8 +52,8 @@ class Tables:
                 teacher=teacher["name"]
             )
             
-            day = (slot[1]-1) // 6
-            timeslot = (slot[1]-1) % 6
+            day = slot[1] // 6
+            timeslot = slot[1] % 6
             
             for gn in self.targeted_groups(event):
                 tables[gn][timeslot][day] = deepcopy(activity)
