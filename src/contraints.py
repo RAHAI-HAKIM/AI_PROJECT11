@@ -212,7 +212,7 @@ class Constraints:
             wasted += (room_data["capacity"] - event_data["headcount"]) / room_data["capacity"] # take the percentage wasted 
         return wasted * weight
     
-    def SEPARATE_LECTURE_PRACTICE(self, state, weight):
+    def SEPARATE_LECTURE_PRACTICE(self, state, weight=1.0, count=True):
         """
         Prevents scheduling a lecture and a practice session for the same course and group on the same day.
 

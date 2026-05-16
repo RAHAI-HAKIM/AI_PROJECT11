@@ -610,7 +610,7 @@ class EnsiaProblem(Problem):
     
     
     # ── pipeline : combine operators, emit `size` distinct neighbours ─────────────
-    def pipeline_generate_neighbors(self, state, size=150):
+    def pipeline_generate_neighbors(self, state, size=200):
         """
         Generates `size` neighbours by randomly choosing one operator per
         neighbour.
@@ -621,21 +621,20 @@ class EnsiaProblem(Problem):
             guarantees at least one operator gets a real chance per neighbour.
         """
         operators = [
-            lambda s: self.relocate_event_operator(s, iteration=8),
-            lambda s: self.swap_events_operator(s,    iteration=12),
-            lambda s: self.shift_events_operator(s,   iteration=8, direction="left",  amount=1),
-            lambda s: self.shift_events_operator(s,   iteration=8, direction="right", amount=1),
-            lambda s: self.shift_events_operator(s,   iteration=4,  direction="left",  amount=2),
-            lambda s: self.shift_events_operator(s,   iteration=4,  direction="right", amount=2),
+            lambda s: self.relocate_event_operator(s, iteration=1),
+            lambda s: self.swap_events_operator(s,    iteration=1),
+            lambda s: self.shift_events_operator(s,   iteration=1, direction="left",  amount=1),
+            lambda s: self.shift_events_operator(s,   iteration=1, direction="right", amount=1),
+            lambda s: self.swap_events_operator(s,    iteration=2),
+            lambda s: self.relocate_event_operator(s, iteration=2),
         ]
     
         neighbors = []
         for _ in range(size):
             candidate = state
-            # shuffle so no single operator dominates when many fail
             for op in random.sample(operators, len(operators)):
                 result = op(state)
-                if result is not state:     # operator produced a real change
+                if result is not state:   
                     candidate = result
                     break
             neighbors.append(candidate)

@@ -5,7 +5,7 @@ from optimizer import Optimizer
 def print_student_timetable(state, prob, group_name="Y1_G1"):
     print(f"\nTimetable for Group: {group_name}")
     print("-" * 139)
-    
+     
     days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"]
     grid = [["" for _ in range(6)] for _ in range(5)]
     
@@ -162,6 +162,7 @@ def run_optimizer(prob, algo, kwargs):
     }
     print(f"\nRunning Soft Constraints Optimization ({algo_labels[algo]})...")
 
+    t_opt_start = time.time()
     if algo == "sa":
         opt_state, _ = Optimizer.Simulated_Annealing(Optimizer, prob, objective="opt", **kwargs)
     elif algo == "hc":
@@ -170,9 +171,12 @@ def run_optimizer(prob, algo, kwargs):
         opt_state, _ = Optimizer.Random_Restart_Hill_Climbing(Optimizer, prob, objective="opt", **kwargs)
     elif algo == "tabu":
         opt_state, _ = Optimizer.Tabu_Search(Optimizer, prob, objective="opt", **kwargs)
+    
+    elapsed = time.time() - t_opt_start
+    print(f"\nOptimization completed in {elapsed:.2f} seconds.")
 
     final_cost = prob.evaluate(opt_state)
-    print(f"\nInitial Cost: {init_cost:.2f}")
+    print(f"Initial Cost: {init_cost:.2f}")
     print(f"Final Cost: {final_cost:.2f}")
     print(f"Total Cost Improvement: {init_cost - final_cost:.2f}")
 
