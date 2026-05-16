@@ -451,6 +451,15 @@ class EnsiaProblem(Problem):
     # CSP Local
 
     def generate_random_state(self):
+        self.event_compatible_rooms = {}
+        for event in self.events:
+            compat = set()
+            for r_id in self.rooms_by_id:
+                if self._is_room_compatible(r_id, event["id"]):
+                    compat.add(r_id)
+            self.event_compatible_rooms[event["id"]] = compat
+            
+        import random
         shuffled_slots = random.sample(self.slots, len(self.events))
         return {event["id"]: slot for event, slot in zip(self.events, shuffled_slots)}
 
@@ -780,3 +789,138 @@ class EnsiaProblem(Problem):
             args = category_args[hc["category"]]
             violations += fn(*args, count=True)
         return violations
+
+    def local_conflicts(self, event_id, roomid, slot, state, slot_to_events, group_day_times):
+        """
+        Calculates the number of hard constraint violations caused specifically by
+        placing `event_id` at `(roomid, slot)`, using a pre-maintained
+        `group_day_times` structure for O(1) consecutive-slot lookups.
+        
+        Args:
+            event_id (int): The ID of the event being evaluated.
+            roomid (int): Candidate room ID.
+            slot (int): Candidate time slot (0-29).
+            state (dict): The current complete schedule.
+            slot_to_events (dict): Mapping of slot → set of event IDs in that slot.
+            group_day_times (dict): Mapping of (group_id, day) → set of occupied time indices.
+            
+        Returns:
+            int: The number of local conflicts detected.
+        """
+        conflicts = 0
+        event     = self.events_by_id[event_id]
+        groups    = self._get_event_groups(event)
+        groups_set = frozenset(groups)
+        teacher    = event["teacher_id"]
+        day        = slot // 6
+        time_idx   = slot % 6
+
+        for eid in slot_to_events.get(slot, []):
+            if eid == event_id: continue
+            rid, _ = state[eid]
+            if rid == roomid: conflicts += 1
+            e2 = self.events_by_id[eid]
+            if e2["teacher_id"] == teacher: conflicts += 1
+            if groups_set.intersection(self._get_event_groups(e2)): conflicts += 1
+
+        for g in groups:
+            times = group_day_times.get((g, day), set()) - {time_idx}
+            ts = sorted(times | {time_idx})
+            run = max_run = 1
+            for k in range(1, len(ts)):
+                run = run + 1 if ts[k] == ts[k-1] + 1 else 1
+                max_run = max(max_run, run)
+            if max_run > 3:
+                conflicts += 1
+
+        return conflicts
+
+    def min_conflicts(self, max_steps=5000):
+        """
+        Solves the CSP locally using the Min-Conflicts heuristic.
+        Starts from a random complete assignment and iteratively repairs
+        randomly chosen conflicted events by minimising local hard-constraint
+        violations.  An incrementally maintained `group_day_times` index makes
+        every conflict evaluation O(groups per event) instead of O(all events).
+        
+        Args:
+            max_steps (int): Maximum number of repair iterations.
+            
+        Returns:
+            dict: The fully feasible state if found, otherwise the state with
+                  the fewest global hard-constraint violations seen.
+        """
+        import random
+        from collections import defaultdict
+
+        current = self.generate_random_state()
+
+        slot_to_events  = defaultdict(set)
+        group_day_times = defaultdict(set)
+        for eid, (rid, slt) in current.items():
+            slot_to_events[slt].add(eid)
+            day = slt // 6
+            t   = slt % 6
+            for g in self._get_event_groups(self.events_by_id[eid]):
+                group_day_times[(g, day)].add(t)
+
+        conflicted = set()
+        for eid in current:
+            rid, slt = current[eid]
+            if self.local_conflicts(eid, rid, slt, current, slot_to_events, group_day_times) > 0:
+                conflicted.add(eid)
+
+        min_global_violations = self.evaluate_csp(current)
+        best_state = current.copy()
+
+        for i in range(max_steps):
+            if not conflicted:
+                return current
+
+            var = random.choice(list(conflicted))
+            old_rid, old_slot = current[var]
+            old_day  = old_slot // 6
+            old_time = old_slot % 6
+
+            slot_to_events[old_slot].discard(var)
+            for g in self._get_event_groups(self.events_by_id[var]):
+                group_day_times[(g, old_day)].discard(old_time)
+
+            best_candidates = []
+            min_c = float('inf')
+            for new_rid in self.event_compatible_rooms[var]:
+                for new_slot in range(30):
+                    c = self.local_conflicts(var, new_rid, new_slot, current, slot_to_events, group_day_times)
+                    if c < min_c:
+                        min_c = c
+                        best_candidates = [(new_rid, new_slot)]
+                    elif c == min_c:
+                        best_candidates.append((new_rid, new_slot))
+
+            new_rid, new_slot = random.choice(best_candidates)
+            new_day  = new_slot // 6
+            new_time = new_slot % 6
+
+            current[var] = (new_rid, new_slot)
+            slot_to_events[new_slot].add(var)
+            for g in self._get_event_groups(self.events_by_id[var]):
+                group_day_times[(g, new_day)].add(new_time)
+
+            affected = set(slot_to_events[old_slot]) | set(slot_to_events[new_slot]) | {var}
+            for eid in affected:
+                rid, slt = current[eid]
+                if self.local_conflicts(eid, rid, slt, current, slot_to_events, group_day_times) > 0:
+                    conflicted.add(eid)
+                else:
+                    conflicted.discard(eid)
+
+            if i % 100 == 0:
+                v = self.evaluate_csp(current)
+                if v == 0:
+                    return current
+                if v < min_global_violations:
+                    min_global_violations = v
+                    best_state = current.copy()
+
+        v = self.evaluate_csp(current)
+        return current if v < min_global_violations else best_state
