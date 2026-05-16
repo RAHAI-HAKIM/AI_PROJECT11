@@ -53,7 +53,24 @@ def _build_room_matrix(problem, state, use_utilization=False):
             matrix[row, slot] = ev["headcount"] / cap
         else:
             matrix[row, slot] += 1
- 
+
+    # filtring out empty rooms
+    assigned_ids = set(v[0] for v in state.values())
+    rooms = [r for r in rooms if r["id"] in assigned_ids]
+    room_index = {r["id"]: i for i, r in enumerate(rooms)}
+    matrix = np.zeros((len(rooms), TOTAL_SLOTS), dtype=float)
+
+    for eid, (rid, slot) in state.items():
+        if rid not in room_index or not (0 <= slot < TOTAL_SLOTS):
+            continue
+        row = room_index[rid]
+        if use_utilization:
+            ev  = problem.events_by_id[eid]
+            cap = max(1, problem.rooms_by_id[rid]["capacity"])
+            matrix[row, slot] = ev["headcount"] / cap
+        else:
+            matrix[row, slot] += 1
+
     labels = [f"{r['name']}  ({r['capacity']})" for r in rooms]
     return matrix, labels
  
