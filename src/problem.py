@@ -78,11 +78,34 @@ class EnsiaProblem(Problem):
         )
 
     def _get_event_groups(self, event):
+        """
+        Retrieves the list of student group IDs associated with a specific event.
+        If the event is a lecture, it fetches all groups within that section.
+        Otherwise, it returns the single group targeted by the event.
+        
+        Args:
+            event (dict): The event dictionary containing 'type_id' and 'target_id'.
+            
+        Returns:
+            list: A list of student group IDs attending this event.
+        """
         if event["type_id"] == 1:
             return self.section_to_group[event["target_id"]]
+        
         return [event["target_id"]]
 
     def _precompute_neighbours(self, event_ids):
+        """
+        Builds an adjacency graph of events to facilitate rapid constraint checking.
+        Events are considered neighbors if they share a teacher, course, or student group.
+        
+        Args:
+            event_ids (iterable): A list or set of event IDs to process.
+            
+        Returns:
+            dict: A mapping of each event ID to a set of neighboring event IDs.
+        """
+        
         teacher_map = defaultdict(set)
         group_map   = defaultdict(set)
         course_map  = defaultdict(set)
@@ -101,21 +124,47 @@ class EnsiaProblem(Problem):
             neighbours[eid] |= course_map[e["course_name"]]
             for gid in self._get_event_groups(e):
                 neighbours[eid] |= group_map[gid]
-            neighbours[eid].discard(eid)
+                
+            neighbours[eid].discard(eid)  
 
         return neighbours
 
     def _build_initial_domain(self, event_id):
+        """
+        Generates the initial domain of all valid (room, time_slot) pairs for a given event.
+        
+        Args:
+            event_id (int/str): The unique identifier for the event.
+            
+        Returns:
+            set: A set of tuples formatted as (room_id, slot_index), checking across all 30 slots.
+        """
         event        = self.events_by_id[event_id]
         compat_rooms = self.event_compatible_rooms[event_id]
+        
         return {(r, s) for r in compat_rooms for s in range(30)}
 
     def _removed_by_assignment(self, assigned_eid, roomid, slot, unassigned_set, neighbours):
+        """
+        Performs forward checking by finding and pruning domain values from unassigned 
+        neighboring events that are invalidated by the current assignment.
+        
+        Args:
+            assigned_eid (int/str): The ID of the event just assigned.
+            roomid (int/str): The room ID assigned to the event.
+            slot (int): The time slot (0-29) assigned to the event.
+            unassigned_set (set): The current set of unassigned event IDs.
+            neighbours (dict): The precomputed event adjacency graph.
+            
+        Returns:
+            dict: A mapping of neighbor IDs to the set of (room, slot) tuples that must be removed.
+        """
         assigned_event   = self.events_by_id[assigned_eid]
         assigned_teacher = assigned_event["teacher_id"]
         assigned_groups  = set(self._get_event_groups(assigned_event))
         assigned_course  = assigned_event["course_name"]
         assigned_is_lec  = (assigned_event["type_id"] == 1)
+        
         assigned_day     = slot // 6
         assigned_time    = slot % 6
 
@@ -130,6 +179,7 @@ class EnsiaProblem(Problem):
             ngroups     = set(self._get_event_groups(nevent))
             ncourse     = nevent["course_name"]
             n_is_lec    = (nevent["type_id"] == 1)
+            
             shared_grps = assigned_groups & ngroups
             same_course = (ncourse == assigned_course)
 
@@ -143,10 +193,26 @@ class EnsiaProblem(Problem):
 
                 if nr == roomid and ns == slot:
                     bad = True
+
                 elif nteacher == assigned_teacher and ns == slot:
                     bad = True
+
                 elif shared_grps and ns == slot:
                     bad = True
+
+                elif same_course and shared_grps:
+                    if (assigned_is_lec and not n_is_lec) or \
+                       (not assigned_is_lec and n_is_lec):
+                        if nday == assigned_day:
+                            bad = True
+
+                    elif assigned_is_lec and n_is_lec:
+                        course_lec_count = self._lec_counts.get((assigned_course, assigned_event["target_id"]), 0)
+                        if course_lec_count == 2:
+                            adj = {slot - 1, slot + 1}
+                            adj = {a for a in adj if a // 6 == assigned_day and 0 <= a % 6 <= 5}
+                            if ns not in adj:
+                                bad = True
 
                 if not bad and shared_grps and nday == assigned_day:
                     for gid in shared_grps:
@@ -174,13 +240,26 @@ class EnsiaProblem(Problem):
         return removals
 
     def _backtrack(self, unassigned_set, state, neighbours):
+        """
+        Executes a recursive backtracking search to assign rooms and time slots to all events.
+        Uses Minimum Remaining Values (MRV) to pick the next event and Forward Checking to 
+        fail early if a domain wipeout occurs.
+        
+        Args:
+            unassigned_set (set): Event IDs that still need assignments.
+            state (dict): The current partial schedule mapping event_ids to (room, slot).
+            neighbours (dict): The precomputed event adjacency graph.
+            
+        Returns:
+            dict or None: The completed state dictionary if successful, or None if no valid assignment exists.
+        """
         if not unassigned_set:
             return state
 
         mrv_eid = min(unassigned_set, key=lambda e: len(self._domains[e]))
 
         if not self._domains[mrv_eid]:
-            return None
+            return None     
 
         unassigned_set.remove(mrv_eid)
         event      = self.events_by_id[mrv_eid]
@@ -204,7 +283,7 @@ class EnsiaProblem(Problem):
             removals = self._removed_by_assignment(
                 mrv_eid, roomid, slot, unassigned_set, neighbours
             )
-
+            
             wipeout = any(
                 len(self._domains[n] - rm) == 0
                 for n, rm in removals.items()
@@ -232,6 +311,20 @@ class EnsiaProblem(Problem):
         return None
 
     def generate_valid_state(self):
+        """
+        Initializes the CSP solver, precomputes valid rooms, divides the problem into 
+        sub-problems by student year, and runs the backtracking algorithm to generate 
+        the full schedule.
+        
+        Args:
+            None
+            
+        Returns:
+            dict: The complete valid schedule mapping event_ids to (room, slot).
+            
+        Raises:
+            RuntimeError: If an event has no compatible rooms or a valid schedule cannot be found.
+        """
         self.event_compatible_rooms = {}
         for event in self.events:
             compat = [
@@ -266,32 +359,17 @@ class EnsiaProblem(Problem):
         by_year = defaultdict(list)
         for e in self.events:
             by_year[event_year(e["id"])].append(e["id"])
-
+            
         full_state = {}
 
         for year, eids in sorted(by_year.items()):
             neighbours = self._precompute_neighbours(eids)
+
             self._domains = {eid: self._build_initial_domain(eid) for eid in eids}
 
-            # Prune slots already used by previous years
             if self.busy_rooms:
                 for eid in eids:
                     self._domains[eid] -= self.busy_rooms
-
-            # Prune busy teachers and groups across different years
-            for eid in eids:
-                e = self.events_by_id[eid]
-                teacher_id = e["teacher_id"]
-                groups = self._get_event_groups(e)
-
-                invalid_slots = set()
-                for roomid, slot in list(self._domains[eid]):
-                    if (teacher_id, slot) in self.busy_teachers:
-                        invalid_slots.add((roomid, slot))
-                    elif any((gid, slot) in self.busy_groups for gid in groups):
-                        invalid_slots.add((roomid, slot))
-
-                self._domains[eid] -= invalid_slots
 
             unassigned = set(eids)
             sub_state  = {}
@@ -301,19 +379,35 @@ class EnsiaProblem(Problem):
                 raise RuntimeError(
                     f"No valid schedule found for year {year} — constraints may be too tight."
                 )
-
+                
             full_state.update(result)
 
         if not self.is_consistent(full_state, is_complete=True):
-            raise RuntimeError("Generated schedule violates hard constraints")
+            raise RuntimeError(
+                "Generated schedule violates hard constraints"
+            )
 
         return full_state
 
     def is_consistent(self, state, is_complete=False):
         """
         Validates the current state against hard constraints.
-        - is_complete=False: only checks booking conflicts (fast, used during local search)
-        - is_complete=True: checks ALL hard constraints (used after full schedule generation)
+
+        During backtracking (is_complete=False), rules already enforced by
+        forward-checking are skipped for efficiency, they cannot be violated
+        because the domain pruner prevents it.
+
+        When called on the "final" complete schedule (is_complete=True), every
+        hard constraint is re-evaluated for safety. This catches anything
+        that forward-checking might have missed (e.g. cross-year room conflicts
+        that were outside the per-year neighbour graph).
+
+        Args:
+            state (dict): The current schedule mapping event_ids to (room, slot).
+            is_complete (bool): True iff every event has been assigned.
+
+        Returns:
+            bool: True if no hard constraint is violated, False otherwise.
         """
         slot_to_rooms, slot_to_groups, slot_to_teachers, teacher_events = \
             self.constraint_obj._build_lookup_tables(state)
@@ -327,12 +421,16 @@ class EnsiaProblem(Problem):
             "teacher_based":    (teacher_events,),
         }
 
-        # Fast rules always checked
-        fast_rules = {
+        forward_checked_rules = [
             "NO_ROOM_DOUBLE_BOOKING",
             "NO_GROUP_DOUBLE_BOOKING",
             "NO_TEACHER_DOUBLE_BOOKING",
-        }
+            "ROOM_CAPACITY_GEQ_HEADCOUNT",
+            "MATCH_ROOM_TYPE",
+            "CONSECUTIVE_SECTION_LECTURES",
+            "SEPARATE_LECTURE_PRACTICE",
+            "MAX_CONSECUTIVE_STUDENT_SLOTS_3",
+        ]
 
         for hc in self.hard_constraints_list:
             if isinstance(hc, str):
@@ -340,8 +438,7 @@ class EnsiaProblem(Problem):
 
             rule = hc["rule"]
 
-            # During local search, only check fast booking rules
-            if not is_complete and rule not in fast_rules:
+            if not is_complete and rule in forward_checked_rules:
                 continue
 
             fn   = getattr(c, rule)
