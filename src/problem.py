@@ -200,20 +200,6 @@ class EnsiaProblem(Problem):
                 elif shared_grps and ns == slot:
                     bad = True
 
-                elif same_course and shared_grps:
-                    if (assigned_is_lec and not n_is_lec) or \
-                       (not assigned_is_lec and n_is_lec):
-                        if nday == assigned_day:
-                            bad = True
-
-                    elif assigned_is_lec and n_is_lec:
-                        course_lec_count = self._lec_counts.get((assigned_course, assigned_event["target_id"]), 0)
-                        if course_lec_count == 2:
-                            adj = {slot - 1, slot + 1}
-                            adj = {a for a in adj if a // 6 == assigned_day and 0 <= a % 6 <= 5}
-                            if ns not in adj:
-                                bad = True
-
                 if not bad and shared_grps and nday == assigned_day:
                     for gid in shared_grps:
                         times_set = self.group_day_times[gid][assigned_day]
