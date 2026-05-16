@@ -63,6 +63,20 @@ class EnsiaProblem(Problem):
             raw_data.get("teachers", {})
         ]
 
+    def _is_room_compatible(self, room_id, event_id):
+        """
+        Returns True iff the room satisfies the event's hard structural
+        requirements (type match + capacity).  Used by every move operator
+        to pre-screen rooms in O(1) instead of running the full is_consistent
+        scan for a change that is guaranteed to violate those two constraints.
+        """
+        room  = self.rooms_by_id[room_id]
+        event = self.events_by_id[event_id]
+        return (
+            room["room_type_id"] == event["required_room_type_id"]
+            and room["capacity"] >= event["headcount"]
+        )
+
     def _get_event_groups(self, event):
         if event["type_id"] == 1:
             return self.section_to_group[event["target_id"]]
@@ -133,18 +147,6 @@ class EnsiaProblem(Problem):
                     bad = True
                 elif shared_grps and ns == slot:
                     bad = True
-                elif same_course and shared_grps:
-                    if (assigned_is_lec and not n_is_lec) or \
-                       (not assigned_is_lec and n_is_lec):
-                        if nday == assigned_day:
-                            bad = True
-                    elif assigned_is_lec and n_is_lec:
-                        course_lec_count = self._lec_counts.get((assigned_course, assigned_event["target_id"]), 0)
-                        if course_lec_count == 2:
-                            adj = {slot - 1, slot + 1}
-                            adj = {a for a in adj if a // 6 == assigned_day and 0 <= a % 6 <= 5}
-                            if ns not in adj:
-                                bad = True
 
                 if not bad and shared_grps and nday == assigned_day:
                     for gid in shared_grps:
@@ -356,87 +358,191 @@ class EnsiaProblem(Problem):
         return {event["id"]: slot for event, slot in zip(self.events, shuffled_slots)}
 
     def swap_events_operator(self, state, iteration=10):
-        course = list(state.keys())
+        """
+        Swaps the TIME SLOTS of two randomly chosen events, keeping each
+        event in its original room.
+    
+        Why slots-only?
+        ───────────────
+        The only hard constraints reachable by a slot-swap are double-booking
+        and scheduling-structure rules.  We check those once at the end with
+        the cheap lookup-table path inside is_consistent(is_complete=False).
+        If the full batch fails we return the original — but because we do
+        ALL `iteration` swaps before checking.
+        """
         temp_state = state.copy()
-
-        for i in range(iteration):
-            selected1 = random.choice(course)
-            selected2 = random.choice(course)
-            values1 = temp_state[selected1]
-            temp_state[selected1] = temp_state[selected2]
-            temp_state[selected2] = values1
-
-        if not self.is_consistent(temp_state):
-            return state
-        return temp_state
-
-    def shift_events_operator(self, state, iteration=10, direction="left", amount=1):
-        if direction not in ["left", "right"]:
-            return state
-
-        new_state = state.copy()
-        room_availability = {rid: set(range(30)) for rid in self.rooms_by_id.keys()}
-        for eid, (rid, slot) in new_state.items():
-            if rid in room_availability:
-                room_availability[rid].discard(slot)
-
-        events = list(new_state.keys())
-
+        events     = list(temp_state.keys())
+    
         for _ in range(iteration):
-            target_event = random.choice(events)
-            room_id, old_slot = new_state[target_event]
-
-            shift = -amount if direction == "left" else amount
-            ideal_slot = (old_slot + shift) % 30
-
-            if ideal_slot in room_availability[room_id]:
-                new_state[target_event] = (room_id, ideal_slot)
-                room_availability[room_id].remove(ideal_slot)
-                room_availability[room_id].add(old_slot)
-
-                if self.is_consistent(new_state):
-                    return new_state
-                else:
-                    new_state[target_event] = (room_id, old_slot)
-                    room_availability[room_id].add(ideal_slot)
-                    room_availability[room_id].remove(old_slot)
-
-        return state
-
-    def relocate_event_operator(self, state, iteration=10):
-        temp_state = state.copy()
-        all_rooms = [key for key, _ in self.rooms_by_id.items()]
-        available_slots = dict()
-        for room_id in all_rooms:
-            available_slots[room_id] = set([i for i in range(5*6)])
-
-        for key, (room_id, slot) in temp_state.items():
-            if slot in available_slots:
-                available_slots[room_id].discard(slot)
-
-        events = list(temp_state.keys())
-
-        for i in range(iteration):
-            event = random.choice(events)
-            (room_id, slot) = temp_state[event]
-            if not available_slots[room_id]:
-                continue
-            next_slot = random.choice(list(available_slots[room_id]))
-            temp_state[event] = (room_id, next_slot)
-            available_slots[room_id].remove(next_slot)
-            available_slots[room_id].add(slot)
-
-        if not self.is_consistent(temp_state):
+            if len(events) < 2:
+                break
+            e1, e2 = random.sample(events, 2)
+            r1, s1 = temp_state[e1]
+            r2, s2 = temp_state[e2]
+            # swap only slots — rooms stay with their original event
+            temp_state[e1] = (r1, s2)
+            temp_state[e2] = (r2, s1)
+    
+        # is_consistent(is_complete=False) checks only the three double-booking
+        # rules — exactly the ones a slot-swap can violate.  It does NOT check
+        # room-type or capacity because those cannot be broken here.
+        if not self.is_consistent(temp_state, is_complete=True):
             return state
+    
         return temp_state
-
-    def pipeline_generate_neighbors(self, state, size=50):
+ 
+ 
+# ── operator 2 : shift events within the same day ────────────────────────────
+    def shift_events_operator(self, state, iteration=10, direction="left", amount=1):
+        """
+        Shifts up to `iteration` randomly chosen events by `amount` slots
+        forward or backward, staying strictly within the same day.
+    
+        Fix 1 — day-boundary wrap:
+            computes the new time within the day and rejects
+            the move if it falls outside 0..5.
+    
+        Fix 2 — early return after first success:
+            accumulates ALL
+            valid shifts and checks once at the end.
+    
+        Fix 3 — is_consistent inside the loop:
+            defers the check
+            to a single call on the fully-modified state.
+        """
+        if direction not in ("left", "right"):
+            return state
+    
+        shift     = -amount if direction == "left" else amount
+        new_state = state.copy()
+    
+        # Track free slots per room (slots not currently occupied)
+        room_avail = {rid: set(range(30)) for rid in self.rooms_by_id}
+        for eid, (rid, slot) in new_state.items():
+            room_avail[rid].discard(slot)
+    
+        events  = list(new_state.keys())
+        changed = False
+    
+        for _ in range(iteration):
+            target   = random.choice(events)
+            rid, old = new_state[target]
+    
+            old_day  = old // 6
+            old_time = old % 6
+            new_time = old_time + shift
+    
+            # FIX 1: reject moves that cross day boundaries
+            if new_time < 0 or new_time > 5:
+                continue
+    
+            ideal = old_day * 6 + new_time
+    
+            if ideal not in room_avail[rid]:
+                continue  # target slot is occupied — skip this attempt
+    
+            # apply the shift
+            new_state[target] = (rid, ideal)
+            room_avail[rid].discard(ideal)
+            room_avail[rid].add(old)
+            changed = True
+            # FIX 2: do NOT return here — keep accumulating
+    
+        if not changed:
+            return state
+    
+        # FIX 3: single consistency check at the end
+        if not self.is_consistent(new_state, is_complete=True):
+            return state
+    
+        return new_state
+    
+    
+    # ── operator 3 : move events to a different compatible (room, slot) ───────────
+    def relocate_event_operator(self, state, iteration=10):
+        """
+        Moves up to `iteration` randomly chosen events to a new (room, slot)
+        pair, where the new room is compatible with the event (type + capacity).
+    
+        New approach:
+            We maintain a per-room free-slot set that is updated on every
+            successful move, so the available-slot view is always current.
+            We also pre-screen rooms with _is_room_compatible so we never
+            attempt a move that would break room-type or capacity constraints.
+        """
+        temp_state = state.copy()
+    
+        # Build per-room free-slot sets, updated incrementally
+        room_avail = {rid: set(range(30)) for rid in self.rooms_by_id}
+        for eid, (rid, slot) in temp_state.items():
+            room_avail[rid].discard(slot)
+    
+        events  = list(temp_state.keys())
+        changed = False
+    
+        for _ in range(iteration):
+            event_id       = random.choice(events)
+            old_rid, old_s = temp_state[event_id]
+    
+            # Only consider rooms that satisfy type + capacity for this event
+            compat_rooms = [
+                rid for rid in self.rooms_by_id
+                if self._is_room_compatible(rid, event_id) and room_avail[rid]
+            ]
+            if not compat_rooms:
+                continue
+    
+            new_rid  = random.choice(compat_rooms)
+            new_slot = random.choice(list(room_avail[new_rid]))
+    
+            # Apply move and update availability
+            temp_state[event_id] = (new_rid, new_slot)
+            room_avail[new_rid].discard(new_slot)
+            room_avail[old_rid].add(old_s)
+            changed = True
+    
+        if not changed:
+            return state
+    
+        # Full check here because room changes CAN affect all hard constraints
+        if not self.is_consistent(temp_state, is_complete=True):
+            return state
+    
+        return temp_state
+        
+    
+    
+    # ── pipeline : combine operators, emit `size` distinct neighbours ─────────────
+    def pipeline_generate_neighbors(self, state, size=150):
+        """
+        Generates `size` neighbours by randomly choosing one operator per
+        neighbour.
+        New approach:
+            Pick ONE operator randomly per neighbour attempt.  If that operator
+            returns the unchanged state (rare — means every attempt inside it
+            was rejected), try the next operator in a shuffled order.  This
+            guarantees at least one operator gets a real chance per neighbour.
+        """
+        operators = [
+            lambda s: self.relocate_event_operator(s, iteration=8),
+            lambda s: self.swap_events_operator(s,    iteration=12),
+            lambda s: self.shift_events_operator(s,   iteration=8, direction="left",  amount=1),
+            lambda s: self.shift_events_operator(s,   iteration=8, direction="right", amount=1),
+            lambda s: self.shift_events_operator(s,   iteration=4,  direction="left",  amount=2),
+            lambda s: self.shift_events_operator(s,   iteration=4,  direction="right", amount=2),
+        ]
+    
         neighbors = []
         for _ in range(size):
-            n = state.copy()
-            n = self.shift_events_operator(n, iteration=10, direction="left", amount=4)
-            n = self.shift_events_operator(n, iteration=10, direction="right", amount=4)
-            neighbors.append(n)
+            candidate = state
+            # shuffle so no single operator dominates when many fail
+            for op in random.sample(operators, len(operators)):
+                result = op(state)
+                if result is not state:     # operator produced a real change
+                    candidate = result
+                    break
+            neighbors.append(candidate)
+    
         return neighbors
 
     def _relocate(self, state, n):
@@ -463,17 +569,32 @@ class EnsiaProblem(Problem):
 
         return state_copy
 
-    def generate_neighbors(self, state, size, n=5):
-        neighbors = []
-        for _ in range(size):
-            next_state = self._relocate(state, n)
-            next_state = self.shift_events_operator(next_state, iteration=10, direction="left", amount=4)
-            next_state = self.shift_events_operator(next_state, iteration=10, direction="right", amount=4)
-            neighbors.append(next_state)
-        return neighbors
-
+    def generate_neighbors(self, state, size=50):
+        """
+        Generates `size` neighbours for the opt objective (soft-constraint
+        minimisation).  Delegates entirely to the pipeline.
+    
+        Old version threaded state through _relocate which had the corrupted
+        slot-tracking bug described above, then chained two shift operators
+        that cancelled each other.  Both issues are fixed in the pipeline.
+        """
+        return self.pipeline_generate_neighbors(state, size=size)
+ 
+ 
     def move_operator(self, state):
-        return self.pipeline_generate_neighbors(self.generate_neighbors_csp(state)[0], size=1)[0]
+        """
+        Returns a single neighbour for SA's per-iteration move.
+    
+        Old version bug:
+            generate_neighbors_csp assigns RANDOM (room,slot) pairs to 10
+            events with zero constraint awareness, so the starting point fed
+            into the pipeline already had up to 10+ hard constraint violations.
+            The pipeline's is_consistent check would then reject everything and
+            return the corrupted CSP state unchanged — a state with violations.
+    
+        """
+        candidates = self.pipeline_generate_neighbors(state, size=5)
+        return min(candidates, key=lambda s: self.evaluate(s))
 
     def generate_neighbors_csp(self, state, size=50):
         neighbors = []

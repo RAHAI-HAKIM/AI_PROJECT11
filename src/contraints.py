@@ -139,61 +139,9 @@ class Constraints:
 
     # SCHEDULING STRUCTURE
 
-    def SEPARATE_LECTURE_PRACTICE(self, state, count=True):
-        """
-        Prevents scheduling a lecture and a practice session for the same course and group on the same day.
 
-        Args:
-            state (dict): The current schedule assignment.
-            count (bool): If True, returns the violation count. If False, returns False on the first violation.
+    # this constraint is NOT well-written + the functionality is implemented in soft constraints => removed for now
 
-        Returns:
-            int | bool: The number of violations, or a boolean indicating validity.
-        """
-        from collections import defaultdict
-        key_to_types = defaultdict(list)
-        for event_id, (roomid, slot) in state.items():
-            event = self.problem.events_by_id[event_id]
-            day   = slot // 6
-            groups = (self.problem.section_to_group[event["target_id"]]
-                    if event["type_id"] == 1 else [event["target_id"]])
-            for gid in groups:
-                key_to_types[(gid, event["course_name"], day)].append(event["type_id"])
-
-        violations = 0
-        for (gid, course, day), types in key_to_types.items():
-            if any(t == 1 for t in types) and any(t != 1 for t in types):
-                if not count: return False
-                violations += 1
-        return violations if count else True
-
-    def CONSECUTIVE_SECTION_LECTURES(self, state, count=True):
-        """
-        Ensures that if a course has multiple lectures for a section, they are scheduled in consecutive slots.
-
-        Args:
-            state (dict): The current schedule assignment.
-            count (bool): If True, returns the violation count. If False, returns False on the first violation.
-
-        Returns:
-            int | bool: The number of violations, or a boolean indicating validity.
-        """
-        from collections import defaultdict
-        course_sec_slots = defaultdict(list)
-        for event_id, (roomid, slot) in state.items():
-            event = self.problem.events_by_id[event_id]
-            if event["type_id"] == 1:
-                course_sec_slots[(event["course_name"], event["target_id"])].append(slot)
-
-        violations = 0
-        for course_sec, slots in course_sec_slots.items():
-            if len(slots) < 2: continue
-            slots.sort()
-            for i in range(len(slots) - 1):
-                if not ((slots[i] // 6) == (slots[i+1] // 6) and abs(slots[i] - slots[i+1]) == 1):
-                    if not count: return False
-                    violations += 1
-        return violations if count else True
 
     def MAX_CONSECUTIVE_STUDENT_SLOTS_3(self, state, count=True):
         """
