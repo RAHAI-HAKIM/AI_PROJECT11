@@ -123,8 +123,8 @@ def select_algorithm():
             print("Invalid input. Please enter a valid integer.")
 
     if choice == 1:
-        temp = get_param("Enter initial temperature", 1000.0)
-        rate = get_param("Enter cooling rate", 0.95)
+        temp = get_param("Enter initial temperature", 500.0)
+        rate = get_param("Enter cooling rate", 0.99)
         iters = get_param("Enter max iterations", 1000)
         strat_choice = get_param("Select strategy (1: Linear, 2: Exponential)", 2)
         strat = "Exponential" if strat_choice == 2 else "Linear"

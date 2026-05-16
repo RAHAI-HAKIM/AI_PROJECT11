@@ -6958,14 +6958,6 @@
                 "category": "state_based"
             },
             {
-                "rule": "SEPARATE_LECTURE_PRACTICE",
-                "category": "state_based"
-            },
-            {
-                "rule": "CONSECUTIVE_SECTION_LECTURES",
-                "category": "state_based"
-            },
-            {
                 "rule": "MAX_CONSECUTIVE_STUDENT_SLOTS_3",
                 "category": "state_based"
             }
@@ -6974,42 +6966,42 @@
             {
                 "rule": "MINIMIZE_GAPS",
                 "category": "group-prof",
-                "weight": 1.0
-            },
-            {
-                "rule": "MINIMIZE_TEACHER_DAYS",
-                "category": "prof",
-                "weight": 1.0
-            },
-            {
-                "rule": "MORNING_LECTURES",
-                "category": "general",
-                "weight": 0.8
+                "weight": 10.0
             },
             {
                 "rule": "SIMILAR_ACTIVITIES",
                 "category": "external",
-                "weight": 0.8
+                "weight": 8.0
             },
             {
-                "rule": "AVOID_THURSDAY_AFTERNOON",
-                "category": "group-prof",
-                "weight": 0.7
-            },
-            {
-                "rule": "AVOID_LAST_SLOT",
-                "category": "group-prof",
-                "weight": 0.7
+                "rule": "MINIMIZE_TEACHER_DAYS",
+                "category": "prof",
+                "weight": 7.0
             },
             {
                 "rule": "MINIMIZE_ROOM_CHANGES",
                 "category": "group-prof",
-                "weight": 0.5
+                "weight": 5.0
+            },
+            {
+                "rule": "MORNING_LECTURES",
+                "category": "general",
+                "weight": 4.0
+            },
+            {
+                "rule": "AVOID_THURSDAY_AFTERNOON",
+                "category": "group-prof",
+                "weight": 3.0
+            },
+            {
+                "rule": "AVOID_LAST_SLOT",
+                "category": "group-prof",
+                "weight": 3.0
             },
             {
                 "rule": "MINIMIZE_WASTED_SEATS",
                 "category": "external",
-                "weight": 0.2
+                "weight": 1.0
             }
         ]
     }
