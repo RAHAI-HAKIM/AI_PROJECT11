@@ -214,89 +214,82 @@ class Optimizer:
            to build and O(1) to hash.
 
         """
-        eval_func     = problem.evaluate if objective == "opt" else problem.evaluate_csp
-        get_neighbors = (problem.generate_neighbors if objective == "opt"
-                         else problem.generate_neighbors_csp)
-
-        NEIGHBOR_SIZE = 50
+        eval_func = problem.evaluate if objective == "opt" else problem.evaluate_csp
+        get_neighbors = problem.generate_neighbors if objective == "opt" else problem.generate_neighbors_csp
 
         global_best     = None
         global_best_val = float("inf")
-
-        if visualize:
-            data = pd.DataFrame(np.random.randn(0, 1), columns=["Cost"])
-
+    
         for restart in range(restarts):
-            if restart == 0:
-                state = dict(problem.state)
-            else:
-                # Fix 3: perturb global best, not a random invalid state
-                state = problem.relocate_event_operator(global_best, iteration=30)
-
+            state    = dict(problem.state) if restart == 0 else dict(problem.generate_random_state())
             best     = dict(state)
             best_val = eval_func(state)
 
-            tabu_queue  = deque()
-            tabu_set    = set()
-            prev_state  = dict(state)
-
-            for iteration in range(iters):
-                neighbors          = get_neighbors(state, size=NEIGHBOR_SIZE)
+            tabu_queue = deque()
+            tabu_set   = set()
+            if visualize:
+                data = pd.DataFrame(
+                        np.random.randn(0, 1),
+                        columns=["Cost"]
+                    )
+            for _ in range(iters):
                 best_candidate     = None
                 best_candidate_val = float("inf")
-                best_candidate_key = None
 
+                valid_events = list(state.keys())
+                # removed event_id getting ... risk of logic for algorithm
+                neighbors = get_neighbors(state,size=20)
+                    
                 for nei in neighbors:
-                    # Fix 1: hash only the delta, not the full state
-                    delta = frozenset(
-                        (eid, v)
-                        for eid, v in nei.items()
-                        if prev_state.get(eid) != v
-                    )
-
-                    is_tabu = delta in tabu_set
-                    val     = eval_func(nei)
-
-                    # Fix 4: aspiration — override tabu if we beat global best
-                    if is_tabu and val >= global_best_val:
-                        continue
-
-                    if val < best_candidate_val:
-                        best_candidate     = nei
-                        best_candidate_val = val
-                        best_candidate_key = delta
-
+                    t = tuple(sorted(nei.items()))
+                    if t not in tabu_set:
+                        val = eval_func(nei)
+                        if val < best_candidate_val:
+                            best_candidate     = nei
+                            best_candidate_val = val
+    
                 if best_candidate is None:
                     break
-
-                prev_state = dict(state)
-                state      = dict(best_candidate)
-
-                tabu_queue.append(best_candidate_key)
-                tabu_set.add(best_candidate_key)
+               
+        
+                
+                state = dict(best_candidate) 
+                t     = tuple(sorted(state.items()))
+                tabu_queue.append(t)
+                tabu_set.add(t)
+    
                 if len(tabu_queue) > tabu_size:
                     tabu_set.discard(tabu_queue.popleft())
-
+    
                 if best_candidate_val < best_val:
-                    best     = dict(state)
+                    best     = dict(state) 
                     best_val = best_candidate_val
 
-                if visualize and (iteration + 1) % 10 == 0:
-                    new_row = pd.DataFrame({"Cost": [best_candidate_val]})
-                    data    = pd.concat([data, new_row], ignore_index=True)
-                    running_chart.line_chart(data)
+                if visualize:
+                    new_row = pd.DataFrame(
+                        {"Cost": [best_candidate_val]}
+                    )
+        
+                    data = pd.concat([data, new_row], ignore_index=True)
+                    if (_+1)%10==0:
+                    # Update running chart
+                        running_chart.line_chart(data)
+        
+                    current_partial_score = best_val
+        
                     running_info.metric(
                         label="Current Score",
-                        value=f"{best_val:.2f}"
+                        value=f"{current_partial_score:.2f}"
                     )
 
             if best_val < global_best_val:
                 global_best     = dict(best)
                 global_best_val = best_val
-
         if visualize:
-            return global_best, global_best_val, data
+            return global_best, global_best_val,data
+
         return global_best, global_best_val
+
 
     # ── Streamlit visualisation helpers — unchanged ───────────────────────────
 
@@ -418,10 +411,12 @@ class Optimizer:
             ax.plot(df["Cost"].values, label=label, color=color)
 
         y_all = np.concatenate([df["Cost"].values for df in results.values()])
-        ax.set_ylim(0, np.max(y_all) * 1.1)
+        ax.set_ylim(np.min(y_all) * 0.9, np.max(y_all) * 1.1)
         ax.set_title("Cost vs Iteration")
         ax.set_xlabel("Iteration")
         ax.set_ylabel("Cost")
-        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
         ax.legend()
-        st.pyplot(fig)
+
+        # st.pyplot(fig)
+        return fig

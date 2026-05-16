@@ -38,13 +38,13 @@ if csp_button:
     with st.sidebar.spinner("Generating a valid CSP solution..."):
         st.session_state.problem = EnsiaProblem("dataset/data_s2.json")
         st.session_state.csp_tables = Tables(st.session_state.problem)
-        st.session_state.optimizer = Optimizer()
-elif "problem" not in st.session_state:
+    st.session_state.mode = None
+
+if "problem" not in st.session_state:
     st.stop()
 
 problem = st.session_state.problem
 csp_tables = st.session_state.csp_tables
-optimizer = st.session_state.optimizer
 
 if "groups" not in st.session_state:
     groups_in_year = {}
@@ -67,14 +67,14 @@ st.sidebar.header("Now optimize the solution with Local Search")
 local_search_method = st.sidebar.selectbox(
     "Select Local Search Method",
     [
+        "All",
         "Hill Climbing Steepest",
         "Hill Climbing First Choice",
         "Hill Climbing Stochastic",
         "Simulated Annealing Exponential",
         "Simulated Annealing Linear",
-        "Tabu",
-        "All",
-    ],
+        "Tabu"
+    ]
 )
 local_search_iterations = st.sidebar.number_input(
     "Number of Iterations", min_value=1, max_value=1000, value=100
@@ -84,16 +84,19 @@ local_search_button = st.sidebar.button(
     "Compare" if local_search_method == "All" else "Optimize Solution"
 )
 
+
 if local_search_button:
+    optimizer = Optimizer()
     with st.sidebar.spinner("Optimizing solution..."):
         if local_search_method == "All":
-            optimizer.compare(
+            st.session_state.local_search_figure = optimizer.compare(
                 problem=problem,
                 iterations=local_search_iterations,
                 restarts=local_search_restarts,
             )
             st.session_state.mode = "all"
         else:
+            st.session_state.local_search_method = local_search_method
             st.session_state.local_search_data, st.session_state.local_search_state = optimizer.random_restart(
                 problem=problem,
                 search=local_search_method,
@@ -102,14 +105,13 @@ if local_search_button:
             )
             st.session_state.local_search_tables = Tables(problem, st.session_state.local_search_state)
             st.session_state.mode = "single"
-            st.rerun()
-
-if "mode" not in st.session_state:
-    st.stop()
+    st.rerun()
 
 if st.session_state.mode =="single":
-    st.header(f"Optimized Solution Using {local_search_method}")
+    st.header(f"Optimized Solution Using {st.session_state.local_search_method}")
     show_table(st.session_state.local_search_tables[f"{year}_{group}"])
     
-    st.header(f"Iterations vs Cost Graph for {local_search_method}")
+    st.header(f"Iterations vs Cost Graph for {st.session_state.local_search_method}")
     st.line_chart(st.session_state.local_search_data)
+elif st.session_state.mode == "all":
+    st.pyplot(st.session_state.local_search_figure)
