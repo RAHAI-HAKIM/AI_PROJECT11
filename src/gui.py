@@ -69,10 +69,7 @@ local_search_method = st.sidebar.selectbox(
     [
         "All",
         "Hill Climbing Steepest",
-        "Hill Climbing First Choice",
-        "Hill Climbing Stochastic",
         "Simulated Annealing Exponential",
-        "Simulated Annealing Linear",
         "Tabu"
     ]
 )

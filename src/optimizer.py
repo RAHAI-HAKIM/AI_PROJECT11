@@ -399,9 +399,7 @@ class Optimizer:
     def compare(self, problem, restarts, iterations):
         results = {}
         for search in [
-            "Hill Climbing Steepest", "Hill Climbing First Choice",
-            "Hill Climbing Stochastic", "Simulated Annealing Exponential",
-            "Simulated Annealing Linear", "Tabu",
+            "Hill Climbing Steepest", "Simulated Annealing Exponential", "Tabu"
         ]:
             results[search] = self.random_restart(
                 problem=problem, search=search,
@@ -440,11 +438,8 @@ class Optimizer:
         dummy = DummyUI()
         
         algorithms = [
-            "Hill Climbing Steepest", 
-            "Hill Climbing First Choice",
-            "Hill Climbing Stochastic", 
+            "Hill Climbing Steepest",
             "Simulated Annealing Exponential",
-            "Simulated Annealing Linear", 
             "Tabu"
         ]
         
