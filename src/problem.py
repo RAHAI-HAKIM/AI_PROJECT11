@@ -451,7 +451,6 @@ class EnsiaProblem(Problem):
     # CSP Local
 
     def generate_random_state(self):
-        self.event_compatible_rooms = {}
         for event in self.events:
             compat = set()
             for r_id in self.rooms_by_id:
