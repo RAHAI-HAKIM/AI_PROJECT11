@@ -6966,7 +6966,7 @@
             {
                 "rule": "MINIMIZE_GAPS",
                 "category": "group-prof",
-                "weight": 9.0
+                "weight": 8.0
             },
             {
                 "rule": "SIMILAR_ACTIVITIES",
@@ -6986,7 +6986,7 @@
             {
                 "rule": "MORNING_LECTURES",
                 "category": "general",
-                "weight": 4.5
+                "weight": 4.7
             },
             {
                 "rule": "AVOID_THURSDAY_AFTERNOON",

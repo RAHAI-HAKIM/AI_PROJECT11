@@ -379,7 +379,7 @@ class Optimizer:
                 )
             case "Simulated Annealing Exponential":
                 return self.Simulated_Annealing(
-                    problem, "opt", 200, 0.999, iterations,
+                    problem, "opt", 300, 0.9995, iterations,
                     strategy="Exponential",
                     visualize=True, col=col, running_chart=chart, running_info=info
                 )
@@ -392,7 +392,7 @@ class Optimizer:
             case "Tabu":
                 return self.Tabu_Search(
                     problem, objective="opt", restarts=1,
-                    iters=iterations, tabu_size=50,
+                    iters=1000, tabu_size=50,
                     visualize=True, col=col, running_chart=chart, running_info=info
                 )
 
